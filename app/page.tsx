@@ -27,6 +27,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
+  // --- YENİ: Filtr üçün state ---
+  const [activeFilter, setActiveFilter] = useState("Yeni");
+
   // 1. Anonim Giriş və İstifadəçi İzləmə
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -43,9 +46,21 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Fetch Posts (Real-time update ilə əvəz olundu ki, səhifə yenilənmədən postlar gəlsin)
+  // 2. Fetch Posts (Filtrə görə dinamik yenilənir)
   useEffect(() => {
-    const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+    setLoading(true);
+    let q;
+    const postsRef = collection(db, "posts");
+
+    // Filtr məntiqi
+    if (activeFilter === "Top") {
+      q = query(postsRef, orderBy("votes", "desc"));
+    } else if (activeFilter === "Trend") {
+      q = query(postsRef, orderBy("votes", "desc"), orderBy("createdAt", "desc"));
+    } else {
+      q = query(postsRef, orderBy("createdAt", "desc"));
+    }
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -53,9 +68,13 @@ export default function Home() {
       }));
       setPosts(data);
       setLoading(false);
+    }, (err) => {
+      console.error("Firestore xətası:", err);
+      setLoading(false);
     });
+
     return () => unsubscribe();
-  }, []);
+  }, [activeFilter]); // activeFilter dəyişəndə yenidən çəkir
 
   // 3. Add Post to Firebase
   const handleAddPost = async (e: React.KeyboardEvent) => {
@@ -141,13 +160,26 @@ export default function Home() {
               />
             </div>
 
-            {/* Filter Tabs */}
+            {/* Filter Tabs - Düymələr aktiv edildi */}
             <div className="flex gap-2 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-2 shadow-sm">
-              <button className="flex items-center gap-2 bg-gray-100 dark:bg-zinc-800 px-4 py-1.5 rounded-full text-sm font-bold text-blue-500">
+              <button 
+                onClick={() => setActiveFilter("Trend")}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold transition ${activeFilter === "Trend" ? "bg-gray-100 dark:bg-zinc-800 text-blue-500" : "text-gray-500"}`}
+              >
                 <Flame size={18} /> Trend
               </button>
-              <button className="flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-zinc-800 px-4 py-1.5 rounded-full text-sm font-medium text-gray-500 transition">Yeni</button>
-              <button className="flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-zinc-800 px-4 py-1.5 rounded-full text-sm font-medium text-gray-500 transition">Top</button>
+              <button 
+                onClick={() => setActiveFilter("Yeni")}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition ${activeFilter === "Yeni" ? "bg-gray-100 dark:bg-zinc-800 text-blue-500" : "text-gray-500"}`}
+              >
+                Yeni
+              </button>
+              <button 
+                onClick={() => setActiveFilter("Top")}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition ${activeFilter === "Top" ? "bg-gray-100 dark:bg-zinc-800 text-blue-500" : "text-gray-500"}`}
+              >
+                Top
+              </button>
             </div>
 
             {/* Post Feed */}
