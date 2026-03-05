@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { 
   ArrowBigUp, ArrowBigDown, MessageSquare, Share2, 
-  Plus, Search, Flame, Sun, Moon, ShieldAlert 
+  Plus, Search, Flame, Sun, Moon, ShieldAlert, X 
 } from "lucide-react";
 // Import your firebase config
 import { db, auth } from "./lib/firebase"; 
@@ -16,7 +16,9 @@ import {
   query, 
   orderBy, 
   serverTimestamp,
-  onSnapshot
+  onSnapshot,
+  where,
+  increment
 } from "firebase/firestore";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 
@@ -27,8 +29,11 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
-  // --- YENİ: Filtr üçün state ---
+  // --- YENİ: State-lər ---
   const [activeFilter, setActiveFilter] = useState("Yeni");
+  const [selectedPost, setSelectedPost] = useState<any>(null);
+  const [commentInput, setCommentInput] = useState("");
+  const [postComments, setPostComments] = useState<any[]>([]);
 
   // 1. Anonim Giriş və İstifadəçi İzləmə
   useEffect(() => {
@@ -52,7 +57,6 @@ export default function Home() {
     let q;
     const postsRef = collection(db, "posts");
 
-    // Filtr məntiqi
     if (activeFilter === "Top") {
       q = query(postsRef, orderBy("votes", "desc"));
     } else if (activeFilter === "Trend") {
@@ -74,7 +78,21 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [activeFilter]); // activeFilter dəyişəndə yenidən çəkir
+  }, [activeFilter]);
+
+  // --- YENİ: Şərhləri dinləmək ---
+  useEffect(() => {
+    if (!selectedPost) return;
+    const q = query(
+      collection(db, "comments"), 
+      where("postId", "==", selectedPost.id), 
+      orderBy("createdAt", "asc")
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPostComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [selectedPost]);
 
   // 3. Add Post to Firebase
   const handleAddPost = async (e: React.KeyboardEvent) => {
@@ -93,6 +111,25 @@ export default function Home() {
       } catch (err) {
         alert("Xəta baş verdi, bazaya qoşula bilmədik.");
       }
+    }
+  };
+
+  // --- YENİ: Şərh əlavə etmək ---
+  const handleAddComment = async () => {
+    if (!commentInput.trim() || !selectedPost) return;
+    try {
+      await addDoc(collection(db, "comments"), {
+        postId: selectedPost.id,
+        text: commentInput,
+        author: user?.displayName || "Anonim Sərnişin",
+        createdAt: serverTimestamp()
+      });
+      await updateDoc(doc(db, "posts", selectedPost.id), {
+        comments: increment(1)
+      });
+      setCommentInput("");
+    } catch (err) {
+      console.error("Şərh xətası:", err);
     }
   };
 
@@ -160,7 +197,7 @@ export default function Home() {
               />
             </div>
 
-            {/* Filter Tabs - Düymələr aktiv edildi */}
+            {/* Filter Tabs */}
             <div className="flex gap-2 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-2 shadow-sm">
               <button 
                 onClick={() => setActiveFilter("Trend")}
@@ -187,7 +224,11 @@ export default function Home() {
               <div className="text-center py-10 text-gray-500 animate-pulse">Postlar yüklənir...</div>
             ) : (
               posts.map((post) => (
-                <div key={post.id} className="group flex rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] hover:border-gray-400 transition cursor-pointer shadow-sm overflow-hidden">
+                <div 
+                  key={post.id} 
+                  onClick={() => setSelectedPost(post)}
+                  className="group flex rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] hover:border-gray-400 transition cursor-pointer shadow-sm overflow-hidden"
+                >
                   {/* Vote Sidebar */}
                   <div className="flex w-10 flex-col items-center bg-gray-50 dark:bg-[#151516] p-2 border-r border-gray-100 dark:border-zinc-800">
                     <button 
@@ -263,6 +304,62 @@ export default function Home() {
           </div>
         </main>
       </div>
+
+      {/* MODAL: Şərh bölməsi (Sənin orijinal stilinə uyğun) */}
+      {selectedPost && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-lg bg-white dark:bg-[#1A1A1B] flex flex-col shadow-2xl border border-gray-300 dark:border-zinc-800">
+            <button 
+              onClick={() => setSelectedPost(null)} 
+              className="absolute right-4 top-4 text-gray-500 hover:text-red-500 transition"
+            >
+              <X size={24} />
+            </button>
+            
+            <div className="p-6 overflow-y-auto">
+              <div className="mb-4">
+                <span className="text-xs text-blue-500 font-bold">u/{selectedPost.author} tərəfindən paylaşıldı:</span>
+                <h2 className="text-xl font-bold mt-1 leading-tight">{selectedPost.title}</h2>
+              </div>
+
+              {/* Şərh Yazma */}
+              <div className="mb-6 mt-4">
+                <textarea 
+                  value={commentInput}
+                  onChange={(e) => setCommentInput(e.target.value)}
+                  placeholder="Nə düşünürsünüz?" 
+                  className="w-full bg-gray-50 dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 rounded-md p-3 text-sm outline-none focus:ring-1 focus:ring-orange-500 h-24 resize-none transition-all"
+                />
+                <div className="flex justify-end mt-2">
+                  <button 
+                    onClick={handleAddComment}
+                    className="bg-orange-600 text-white px-6 py-1.5 rounded-full font-bold text-sm hover:bg-orange-700 transition"
+                  >
+                    Şərh Paylaş
+                  </button>
+                </div>
+              </div>
+
+              {/* Şərhlər */}
+              <div className="space-y-4 border-t border-gray-100 dark:border-zinc-800 pt-4">
+                {postComments.length === 0 ? (
+                  <p className="text-center text-gray-500 text-sm py-4 italic">Hələ şərh yazılmayıb...</p>
+                ) : (
+                  postComments.map((c: any) => (
+                    <div key={c.id} className="flex gap-3 animate-in fade-in slide-in-from-bottom-2">
+                      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-zinc-700 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">u/{c.author}</p>
+                        <p className="text-sm mt-1 text-gray-700 dark:text-gray-300">{c.text}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
