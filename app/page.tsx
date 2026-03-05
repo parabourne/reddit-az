@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { 
   ArrowBigUp, ArrowBigDown, MessageSquare, Share2, 
-  Search, Flame, Sun, Moon, Send, ChevronDown, Plus, X
+  Search, Flame, Sun, Moon, Send, ChevronDown, Plus, X,
+  Facebook // Yeni əlavə edildi
 } from "lucide-react";
 import { db, auth } from "./lib/firebase"; 
 import { 
@@ -210,7 +211,6 @@ export default function Home() {
     } catch (err) { toast.error("Xəta!", { id: loadingToast }); }
   };
 
-  // --- YENİ: Crosspost funksiyası ---
   const handleCrosspost = async (originalPost: any) => {
     if (!user) return toast.error("Paylaşmaq üçün giriş etməlisiniz!");
     
@@ -218,7 +218,7 @@ export default function Home() {
     try {
       await addDoc(collection(db, "posts"), {
         title: originalPost.title,
-        community: selectedCommunity, // Hal-hazırda seçilmiş icmaya göndərir
+        community: selectedCommunity, 
         author: user?.displayName || "Anonim",
         authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
         votes: 1,
@@ -226,7 +226,6 @@ export default function Home() {
         downvotedBy: [],
         comments: 0,
         createdAt: serverTimestamp(),
-        // Crosspost məlumatları
         isCrosspost: true,
         originalAuthor: originalPost.author,
         originalCommunity: originalPost.community
@@ -240,7 +239,7 @@ export default function Home() {
   return (
     <div className={`${isDarkMode ? "dark" : ""} min-h-screen transition-colors duration-300`}>
       <Toaster position="bottom-right" />
-      <div className="bg-[#DAE0E6] dark:bg-[#030303] min-h-screen text-zinc-900 dark:text-zinc-100">
+      <div className="bg-[#DAE0E6] dark:bg-[#030303] min-h-screen text-zinc-900 dark:text-zinc-100 font-sans">
         
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveCommunity(null)}>
@@ -341,7 +340,6 @@ export default function Home() {
                       
                       <h2 className="text-lg font-semibold mb-2 leading-tight">{post.title}</h2>
 
-                      {/* YENİ: Crosspost UI - Əgər post crosspost-dursa məlumatı göstər */}
                       {post.isCrosspost && (
                         <div className="mb-3 p-2 border-l-4 border-orange-500 bg-gray-50 dark:bg-zinc-900/50 rounded-r text-[11px]">
                            <p className="text-gray-500 italic">
@@ -355,7 +353,6 @@ export default function Home() {
                           <MessageSquare size={18} /> {post.comments || 0} Şərh
                         </button>
                         
-                        {/* YENİ: Paylaş düyməsi artıq handleCrosspost funksiyasını çağırır */}
                         <button 
                           onClick={() => handleCrosspost(post)}
                           className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition"
@@ -371,7 +368,7 @@ export default function Home() {
             )}
           </div>
 
-          <div className="hidden w-1/3 flex-col gap-4 md:flex">
+          <aside className="hidden w-1/3 flex-col gap-4 md:flex">
             <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden shadow-sm">
                <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
                <div className="p-2 flex flex-col gap-1">
@@ -396,9 +393,25 @@ export default function Home() {
             
             <div className="p-4 bg-white dark:bg-[#1A1A1B] rounded border border-gray-300 dark:border-zinc-800 shadow-sm">
               <h3 className="text-xs font-bold uppercase mb-2 text-gray-500">Haqqımızda</h3>
-              <p className="text-xs leading-relaxed opacity-70">Reddit.az Azərbaycanın ən aktiv müzakirə platforması olmağı hədəfləyir. İcmalarımıza qoşulun!</p>
+              <p className="text-xs leading-relaxed opacity-70 mb-4">Reddit.az Azərbaycanın ən aktiv müzakirə platforması olmağı hədəfləyir. İcmalarımıza qoşulun!</p>
+              
+              <div className="space-y-3 border-t dark:border-zinc-800 pt-4">
+                <a href="https://wa.me/994555556963" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold hover:text-green-500 transition group">
+                   <div className="bg-green-100 dark:bg-green-900/30 p-1.5 rounded-full group-hover:bg-green-500 transition-colors">
+                      <MessageSquare size={14} className="text-green-600 group-hover:text-white" />
+                   </div>
+                   WhatsApp: 055 555 69 63
+                </a>
+
+                <a href="https://www.facebook.com/parabournex" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold hover:text-blue-500 transition group">
+                   <div className="bg-blue-100 dark:bg-blue-900/30 p-1.5 rounded-full group-hover:bg-blue-600 transition-colors">
+                      <Facebook size={14} className="text-blue-600 group-hover:text-white" />
+                   </div>
+                   Facebook: parabournex
+                </a>
+              </div>
             </div>
-          </div>
+          </aside>
         </main>
       </div>
     </div>
