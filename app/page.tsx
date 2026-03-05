@@ -89,7 +89,7 @@ export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [postInput, setPostInput] = useState("");
   const [selectedCommunity, setSelectedCommunity] = useState("r/baku");
-  const [activeCommunity, setActiveCommunity] = useState<string | null>(null); // Filtirləmə üçün
+  const [activeCommunity, setActiveCommunity] = useState<string | null>(null); 
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
@@ -110,13 +110,10 @@ export default function Home() {
     setLoading(true);
     const postsRef = collection(db, "posts");
     
-    // Dinamik Sorğu Məntiqi
     let q;
     if (activeCommunity) {
-      // Müəyyən icma seçilibsə
       q = query(postsRef, where("community", "==", activeCommunity), orderBy("createdAt", "desc"));
     } else {
-      // Ümumi sıralama
       q = activeFilter === "Top" 
         ? query(postsRef, orderBy("votes", "desc"))
         : query(postsRef, orderBy("createdAt", "desc"));
@@ -125,7 +122,6 @@ export default function Home() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let fetchedPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // Trend Alqoritmi (yalnız ümumi baxışda və ya seçiləndə)
       if (activeFilter === "Trend" && !activeCommunity) {
         fetchedPosts = fetchedPosts.sort((a: any, b: any) => {
           const timeA = a.createdAt?.seconds || Date.now() / 1000;
@@ -148,6 +144,52 @@ export default function Home() {
     return () => unsubscribe();
   }, [activeFilter, activeCommunity]);
 
+  const handleVote = async (postId: string, direction: 'up' | 'down') => {
+    if (!user) return toast.error("Səs vermək üçün giriş etməlisiniz!");
+
+    const postRef = doc(db, "posts", postId);
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    const userId = user.uid;
+    const upvotedBy = post.upvotedBy || [];
+    const downvotedBy = post.downvotedBy || [];
+
+    let newVotes = post.votes || 0;
+    let newUpvotedBy = [...upvotedBy];
+    let newDownvotedBy = [...downvotedBy];
+
+    if (direction === 'up') {
+      if (upvotedBy.includes(userId)) {
+        newVotes -= 1;
+        newUpvotedBy = newUpvotedBy.filter(id => id !== userId);
+      } else {
+        newVotes += downvotedBy.includes(userId) ? 2 : 1;
+        newUpvotedBy.push(userId);
+        newDownvotedBy = newDownvotedBy.filter(id => id !== userId);
+      }
+    } else {
+      if (downvotedBy.includes(userId)) {
+        newVotes += 1;
+        newDownvotedBy = newDownvotedBy.filter(id => id !== userId);
+      } else {
+        newVotes -= upvotedBy.includes(userId) ? 2 : 1;
+        newDownvotedBy.push(userId);
+        newUpvotedBy = newUpvotedBy.filter(id => id !== userId);
+      }
+    }
+
+    try {
+      await updateDoc(postRef, {
+        votes: newVotes,
+        upvotedBy: newUpvotedBy,
+        downvotedBy: newDownvotedBy
+      });
+    } catch (err) {
+      toast.error("Xəta baş verdi!");
+    }
+  };
+
   const handleAddPost = async () => {
     if (!postInput.trim()) return;
     const loadingToast = toast.loading("Paylaşılır...");
@@ -158,6 +200,8 @@ export default function Home() {
         author: user?.displayName || "Anonim",
         authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
         votes: 1,
+        upvotedBy: [user?.uid],
+        downvotedBy: [],
         comments: 0,
         createdAt: serverTimestamp()
       });
@@ -171,7 +215,6 @@ export default function Home() {
       <Toaster position="bottom-right" />
       <div className="bg-[#DAE0E6] dark:bg-[#030303] min-h-screen text-zinc-900 dark:text-zinc-100">
         
-        {/* Navbar */}
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveCommunity(null)}>
             <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">R</div>
@@ -187,7 +230,6 @@ export default function Home() {
         <main className="mx-auto flex max-w-6xl gap-6 p-4 md:p-6">
           <div className="flex w-full flex-col gap-4 md:w-2/3">
             
-            {/* Active Community Indicator */}
             {activeCommunity && (
               <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-md shadow-sm">
                 <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">Göstərilir: <span className="underline">{activeCommunity}</span></p>
@@ -197,7 +239,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Create Post */}
             <div className="flex flex-col gap-3 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" />
@@ -221,7 +262,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Filters */}
             {!activeCommunity && (
               <div className="flex gap-2 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-2 overflow-x-auto">
                 {["Trend", "Yeni", "Top"].map((f) => (
@@ -236,7 +276,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Posts List */}
             {loading ? (
               <div className="space-y-4 animate-pulse">
                 {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-200 dark:bg-zinc-800 rounded"></div>)}
@@ -246,12 +285,21 @@ export default function Home() {
                 <div key={post.id} className="flex flex-col rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] shadow-sm hover:border-gray-400 dark:hover:border-zinc-600 transition-colors overflow-hidden">
                   <div className="flex">
                     <div className="flex w-10 flex-col items-center bg-gray-50 dark:bg-[#151516] p-2 border-r dark:border-zinc-800">
-                      <button onClick={() => {
-                        updateDoc(doc(db, "posts", post.id), { votes: increment(1) });
-                        toast.success('Səs verildi!', { icon: '⬆️' });
-                      }} className="text-gray-400 hover:text-orange-600 transition-colors"><ArrowBigUp size={28} /></button>
-                      <span className="text-xs font-bold py-1">{post.votes}</span>
-                      <button onClick={() => updateDoc(doc(db, "posts", post.id), { votes: increment(-1) })} className="text-gray-400 hover:text-blue-600 transition-colors"><ArrowBigDown size={28} /></button>
+                      <button 
+                        onClick={() => handleVote(post.id, 'up')} 
+                        className={`${post.upvotedBy?.includes(user?.uid) ? "text-orange-600" : "text-gray-400"} hover:bg-gray-200 dark:hover:bg-zinc-800 rounded p-1 transition`}
+                      >
+                        <ArrowBigUp size={28} fill={post.upvotedBy?.includes(user?.uid) ? "currentColor" : "none"} />
+                      </button>
+                      <span className={`text-xs font-bold py-1 ${post.upvotedBy?.includes(user?.uid) ? "text-orange-600" : post.downvotedBy?.includes(user?.uid) ? "text-blue-600" : ""}`}>
+                        {post.votes}
+                      </span>
+                      <button 
+                        onClick={() => handleVote(post.id, 'down')} 
+                        className={`${post.downvotedBy?.includes(user?.uid) ? "text-blue-600" : "text-gray-400"} hover:bg-gray-200 dark:hover:bg-zinc-800 rounded p-1 transition`}
+                      >
+                        <ArrowBigDown size={28} fill={post.downvotedBy?.includes(user?.uid) ? "currentColor" : "none"} />
+                      </button>
                     </div>
                     <div className="flex flex-col p-3 w-full">
                       <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-2">
@@ -278,7 +326,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* Sidebar */}
           <div className="hidden w-1/3 flex-col gap-4 md:flex">
             <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden shadow-sm">
                <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
