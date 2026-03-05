@@ -210,6 +210,33 @@ export default function Home() {
     } catch (err) { toast.error("Xəta!", { id: loadingToast }); }
   };
 
+  // --- YENİ: Crosspost funksiyası ---
+  const handleCrosspost = async (originalPost: any) => {
+    if (!user) return toast.error("Paylaşmaq üçün giriş etməlisiniz!");
+    
+    const loadingToast = toast.loading("Yenidən paylaşılır...");
+    try {
+      await addDoc(collection(db, "posts"), {
+        title: originalPost.title,
+        community: selectedCommunity, // Hal-hazırda seçilmiş icmaya göndərir
+        author: user?.displayName || "Anonim",
+        authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
+        votes: 1,
+        upvotedBy: [user?.uid],
+        downvotedBy: [],
+        comments: 0,
+        createdAt: serverTimestamp(),
+        // Crosspost məlumatları
+        isCrosspost: true,
+        originalAuthor: originalPost.author,
+        originalCommunity: originalPost.community
+      });
+      toast.success("Uğurla yenidən paylaşıldı!", { id: loadingToast });
+    } catch (err) {
+      toast.error("Paylaşarkən xəta!", { id: loadingToast });
+    }
+  };
+
   return (
     <div className={`${isDarkMode ? "dark" : ""} min-h-screen transition-colors duration-300`}>
       <Toaster position="bottom-right" />
@@ -311,12 +338,30 @@ export default function Home() {
                         </span>
                         <span>• u/{post.author} • {formatTime(post.createdAt)}</span>
                       </div>
+                      
                       <h2 className="text-lg font-semibold mb-2 leading-tight">{post.title}</h2>
+
+                      {/* YENİ: Crosspost UI - Əgər post crosspost-dursa məlumatı göstər */}
+                      {post.isCrosspost && (
+                        <div className="mb-3 p-2 border-l-4 border-orange-500 bg-gray-50 dark:bg-zinc-900/50 rounded-r text-[11px]">
+                           <p className="text-gray-500 italic">
+                             Yenidən paylaşıldı: <span className="font-bold text-orange-600">{post.originalCommunity}</span> • u/{post.originalAuthor}
+                           </p>
+                        </div>
+                      )}
+
                       <div className="flex gap-4 text-xs font-bold text-gray-500 mt-auto pt-2">
                         <button onClick={() => setOpenPostId(openPostId === post.id ? null : post.id)} className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition">
                           <MessageSquare size={18} /> {post.comments || 0} Şərh
                         </button>
-                        <button className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition"><Share2 size={18} /> Paylaş</button>
+                        
+                        {/* YENİ: Paylaş düyməsi artıq handleCrosspost funksiyasını çağırır */}
+                        <button 
+                          onClick={() => handleCrosspost(post)}
+                          className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition"
+                        >
+                          <Share2 size={18} /> Paylaş
+                        </button>
                       </div>
                     </div>
                   </div>
