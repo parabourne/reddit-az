@@ -4,17 +4,25 @@ import { useState, useEffect } from "react";
 import { 
   ArrowBigUp, ArrowBigDown, MessageSquare, Share2, 
   Search, Flame, Sun, Moon, Send, ChevronDown, Plus, X,
-  Facebook 
+  Facebook, LogIn, LogOut 
 } from "lucide-react";
 import { db, auth } from "./lib/firebase"; 
 import { 
   collection, addDoc, updateDoc, doc, query, orderBy, 
   serverTimestamp, onSnapshot, where, increment 
 } from "firebase/firestore";
-import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { 
+  signInAnonymously, 
+  onAuthStateChanged, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut 
+} from "firebase/auth";
 import { formatDistanceToNow } from "date-fns";
 import { az } from "date-fns/locale";
 import toast, { Toaster } from "react-hot-toast";
+
+const googleProvider = new GoogleAuthProvider();
 
 const formatTime = (timestamp: any) => {
   if (!timestamp) return "indi";
@@ -89,7 +97,7 @@ function InlineComments({ postId, user }: { postId: string, user: any }) {
 export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [postInput, setPostInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState(""); // AXTARIŞ STATE
+  const [searchQuery, setSearchQuery] = useState(""); 
   const [selectedCommunity, setSelectedCommunity] = useState("r/baku");
   const [activeCommunity, setActiveCommunity] = useState<string | null>(null); 
   const [posts, setPosts] = useState<any[]>([]);
@@ -107,6 +115,20 @@ export default function Home() {
     });
     return () => unsubscribe();
   }, []);
+
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+      toast.success("Giriş edildi!");
+    } catch (err) {
+      toast.error("Xəta baş verdi!");
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    toast.success("Çıxış edildi");
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -153,7 +175,7 @@ export default function Home() {
   );
 
   const handleVote = async (postId: string, direction: 'up' | 'down') => {
-    if (!user) return toast.error("Səs vermək üçün giriş etməlisiniz!");
+    if (!user || user.isAnonymous) return toast.error("Səs vermək üçün giriş etməlisiniz!");
 
     const postRef = doc(db, "posts", postId);
     const post = posts.find(p => p.id === postId);
@@ -200,6 +222,7 @@ export default function Home() {
 
   const handleAddPost = async () => {
     if (!postInput.trim()) return;
+    if (user?.isAnonymous) return toast.error("Paylaşmaq üçün giriş etməlisiniz!");
     const loadingToast = toast.loading("Paylaşılır...");
     try {
       await addDoc(collection(db, "posts"), {
@@ -219,7 +242,7 @@ export default function Home() {
   };
 
   const handleCrosspost = async (originalPost: any) => {
-    if (!user) return toast.error("Paylaşmaq üçün giriş etməlisiniz!");
+    if (!user || user.isAnonymous) return toast.error("Paylaşmaq üçün giriş etməlisiniz!");
     const loadingToast = toast.loading("Yenidən paylaşılır...");
     try {
       await addDoc(collection(db, "posts"), {
@@ -275,6 +298,18 @@ export default function Home() {
             <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition">
                 {isDarkMode ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} />}
             </button>
+            {user && !user.isAnonymous ? (
+              <div className="flex items-center gap-2">
+                <img src={user.photoURL} className="h-8 w-8 rounded-full border dark:border-zinc-700" alt="profile" />
+                <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-500 transition">
+                  <LogOut size={20} />
+                </button>
+              </div>
+            ) : (
+              <button onClick={handleLogin} className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-md">
+                <LogIn size={18} /> <span className="hidden md:block">Giriş</span>
+              </button>
+            )}
           </div>
         </nav>
 
@@ -298,20 +333,23 @@ export default function Home() {
                   value={postInput} 
                   onChange={(e) => setPostInput(e.target.value)} 
                   onKeyDown={(e) => e.key === "Enter" && handleAddPost()}
-                  placeholder="Nə düşünürsünüz?" 
-                  className="flex-1 rounded-md bg-gray-100 dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all" 
+                  placeholder={user?.isAnonymous ? "Paylaşmaq üçün giriş edin..." : "Nə düşünürsünüz?"}
+                  disabled={user?.isAnonymous}
+                  className="flex-1 rounded-md bg-gray-100 dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all disabled:opacity-50" 
                 />
               </div>
-              <div className="flex justify-between items-center border-t dark:border-zinc-800 pt-3">
-                <select 
-                  value={selectedCommunity} 
-                  onChange={(e) => setSelectedCommunity(e.target.value)}
-                  className="bg-gray-100 dark:bg-[#272729] text-xs font-bold p-1.5 rounded border border-transparent outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
-                >
-                  {communities.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <button onClick={handleAddPost} className="bg-blue-600 text-white px-5 py-1.5 rounded-full text-sm font-bold hover:bg-blue-700 shadow-md transition transform active:scale-95">Paylaş</button>
-              </div>
+              {!user?.isAnonymous && (
+                <div className="flex justify-between items-center border-t dark:border-zinc-800 pt-3">
+                  <select 
+                    value={selectedCommunity} 
+                    onChange={(e) => setSelectedCommunity(e.target.value)}
+                    className="bg-gray-100 dark:bg-[#272729] text-xs font-bold p-1.5 rounded border border-transparent outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
+                  >
+                    {communities.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <button onClick={handleAddPost} className="bg-blue-600 text-white px-5 py-1.5 rounded-full text-sm font-bold hover:bg-blue-700 shadow-md transition transform active:scale-95">Paylaş</button>
+                </div>
+              )}
             </div>
 
             {/* FİLTRLƏR */}
