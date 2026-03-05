@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { 
   ArrowBigUp, ArrowBigDown, MessageSquare, Share2, 
-  Search, Flame, Sun, Moon, Send, ChevronDown, Plus
+  Search, Flame, Sun, Moon, Send, ChevronDown, Plus, X
 } from "lucide-react";
 import { db, auth } from "./lib/firebase"; 
 import { 
@@ -27,7 +27,6 @@ const formatTime = (timestamp: any) => {
 function InlineComments({ postId, user }: { postId: string, user: any }) {
   const [comments, setComments] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "comments"), where("postId", "==", postId), orderBy("createdAt", "asc"));
@@ -53,8 +52,6 @@ function InlineComments({ postId, user }: { postId: string, user: any }) {
     } catch (err) { toast.error("Xəta baş verdi!"); }
   };
 
-  const displayedComments = showAll ? comments : comments.slice(-3);
-
   return (
     <div className="border-t border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-[#151516] p-4">
       <div className="flex gap-3 mb-4">
@@ -70,7 +67,7 @@ function InlineComments({ postId, user }: { postId: string, user: any }) {
         </div>
       </div>
       <div className="space-y-3">
-        {displayedComments.map((c) => (
+        {comments.map((c) => (
           <div key={c.id} className="flex gap-3">
             <img src={c.authorImg} className="h-7 w-7 rounded-full" />
             <div className="bg-white dark:bg-[#272729] p-2 rounded-2xl flex-1 border border-gray-100 dark:border-zinc-800 text-sm">
@@ -92,6 +89,7 @@ export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [postInput, setPostInput] = useState("");
   const [selectedCommunity, setSelectedCommunity] = useState("r/baku");
+  const [activeCommunity, setActiveCommunity] = useState<string | null>(null); // Filtirləmə üçün
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
@@ -111,21 +109,29 @@ export default function Home() {
   useEffect(() => {
     setLoading(true);
     const postsRef = collection(db, "posts");
-    let q = query(postsRef, orderBy("createdAt", "desc"));
-
-    if (activeFilter === "Top") q = query(postsRef, orderBy("votes", "desc"));
+    
+    // Dinamik Sorğu Məntiqi
+    let q;
+    if (activeCommunity) {
+      // Müəyyən icma seçilibsə
+      q = query(postsRef, where("community", "==", activeCommunity), orderBy("createdAt", "desc"));
+    } else {
+      // Ümumi sıralama
+      q = activeFilter === "Top" 
+        ? query(postsRef, orderBy("votes", "desc"))
+        : query(postsRef, orderBy("createdAt", "desc"));
+    }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let fetchedPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // --- TREND ALQORİTMİ (Client-side sorting) ---
-      if (activeFilter === "Trend") {
+      // Trend Alqoritmi (yalnız ümumi baxışda və ya seçiləndə)
+      if (activeFilter === "Trend" && !activeCommunity) {
         fetchedPosts = fetchedPosts.sort((a: any, b: any) => {
           const timeA = a.createdAt?.seconds || Date.now() / 1000;
           const timeB = b.createdAt?.seconds || Date.now() / 1000;
           const hoursA = (Date.now() / 1000 - timeA) / 3600;
           const hoursB = (Date.now() / 1000 - timeB) / 3600;
-          
           const scoreA = (a.votes || 0) / Math.pow(hoursA + 2, 1.5);
           const scoreB = (b.votes || 0) / Math.pow(hoursB + 2, 1.5);
           return scoreB - scoreA;
@@ -134,9 +140,13 @@ export default function Home() {
 
       setPosts(fetchedPosts);
       setLoading(false);
+    }, (error) => {
+      console.error("Firestore xətası:", error);
+      setLoading(false);
     });
+
     return () => unsubscribe();
-  }, [activeFilter]);
+  }, [activeFilter, activeCommunity]);
 
   const handleAddPost = async () => {
     if (!postInput.trim()) return;
@@ -157,106 +167,144 @@ export default function Home() {
   };
 
   return (
-    <div className={`${isDarkMode ? "dark" : ""} min-h-screen`}>
+    <div className={`${isDarkMode ? "dark" : ""} min-h-screen transition-colors duration-300`}>
       <Toaster position="bottom-right" />
       <div className="bg-[#DAE0E6] dark:bg-[#030303] min-h-screen text-zinc-900 dark:text-zinc-100">
         
-        {/* Navbar eynidir... */}
+        {/* Navbar */}
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
-          <div className="flex items-center gap-2">
-            <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center">R</div>
-            <h1 className="hidden md:block text-xl font-bold">reddit.az</h1>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveCommunity(null)}>
+            <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">R</div>
+            <h1 className="hidden md:block text-xl font-bold tracking-tight">reddit.az</h1>
           </div>
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition">
-              {isDarkMode ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} />}
-          </button>
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition">
+                {isDarkMode ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} />}
+            </button>
+          </div>
         </nav>
 
         <main className="mx-auto flex max-w-6xl gap-6 p-4 md:p-6">
           <div className="flex w-full flex-col gap-4 md:w-2/3">
             
-            {/* Post Yaratma Bölməsi - Yeni Community seçimi ilə */}
+            {/* Active Community Indicator */}
+            {activeCommunity && (
+              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-md shadow-sm">
+                <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">Göstərilir: <span className="underline">{activeCommunity}</span></p>
+                <button onClick={() => setActiveCommunity(null)} className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-red-500 transition">
+                  <X size={14} /> Təmizlə
+                </button>
+              </div>
+            )}
+
+            {/* Create Post */}
             <div className="flex flex-col gap-3 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-4 shadow-sm">
               <div className="flex items-center gap-3">
-                <img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full bg-gray-200" />
+                <img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" />
                 <input 
                   value={postInput} 
                   onChange={(e) => setPostInput(e.target.value)} 
                   onKeyDown={(e) => e.key === "Enter" && handleAddPost()}
                   placeholder="Nə düşünürsünüz?" 
-                  className="flex-1 rounded-md bg-gray-100 dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 px-4 py-2 text-sm outline-none" 
+                  className="flex-1 rounded-md bg-gray-100 dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all" 
                 />
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center border-t dark:border-zinc-800 pt-3">
                 <select 
                   value={selectedCommunity} 
                   onChange={(e) => setSelectedCommunity(e.target.value)}
-                  className="bg-gray-100 dark:bg-[#272729] text-xs font-bold p-1.5 rounded border border-transparent outline-none cursor-pointer"
+                  className="bg-gray-100 dark:bg-[#272729] text-xs font-bold p-1.5 rounded border border-transparent outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
                 >
                   {communities.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <button onClick={handleAddPost} className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-blue-700 transition">Paylaş</button>
+                <button onClick={handleAddPost} className="bg-blue-600 text-white px-5 py-1.5 rounded-full text-sm font-bold hover:bg-blue-700 shadow-md transition transform active:scale-95">Paylaş</button>
               </div>
             </div>
 
-            {/* Filterlər */}
-            <div className="flex gap-2 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-2">
-              {["Trend", "Yeni", "Top"].map((f) => (
-                <button 
-                  key={f}
-                  onClick={() => setActiveFilter(f)}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold transition ${activeFilter === f ? "bg-gray-100 dark:bg-zinc-800 text-blue-500" : "text-gray-500"}`}
-                >
-                  {f === "Trend" && <Flame size={18} />} {f}
-                </button>
-              ))}
-            </div>
+            {/* Filters */}
+            {!activeCommunity && (
+              <div className="flex gap-2 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-2 overflow-x-auto">
+                {["Trend", "Yeni", "Top"].map((f) => (
+                  <button 
+                    key={f}
+                    onClick={() => setActiveFilter(f)}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold transition-all ${activeFilter === f ? "bg-gray-100 dark:bg-zinc-800 text-blue-500 shadow-inner" : "text-gray-500 hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}
+                  >
+                    {f === "Trend" && <Flame size={18} />} {f}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {/* Post Siyahısı */}
-            {loading ? <div className="text-center py-10 animate-pulse text-gray-500 font-bold italic">Postlar sıralanır...</div> : 
+            {/* Posts List */}
+            {loading ? (
+              <div className="space-y-4 animate-pulse">
+                {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-200 dark:bg-zinc-800 rounded"></div>)}
+              </div>
+            ) : (
               posts.map((post) => (
-                <div key={post.id} className="flex flex-col rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] shadow-sm overflow-hidden">
+                <div key={post.id} className="flex flex-col rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] shadow-sm hover:border-gray-400 dark:hover:border-zinc-600 transition-colors overflow-hidden">
                   <div className="flex">
                     <div className="flex w-10 flex-col items-center bg-gray-50 dark:bg-[#151516] p-2 border-r dark:border-zinc-800">
                       <button onClick={() => {
                         updateDoc(doc(db, "posts", post.id), { votes: increment(1) });
-                        toast('Səs verildi!', { icon: '⬆️' });
-                      }} className="text-gray-400 hover:text-orange-600"><ArrowBigUp size={28} /></button>
+                        toast.success('Səs verildi!', { icon: '⬆️' });
+                      }} className="text-gray-400 hover:text-orange-600 transition-colors"><ArrowBigUp size={28} /></button>
                       <span className="text-xs font-bold py-1">{post.votes}</span>
-                      <button onClick={() => updateDoc(doc(db, "posts", post.id), { votes: increment(-1) })} className="text-gray-400 hover:text-blue-600"><ArrowBigDown size={28} /></button>
+                      <button onClick={() => updateDoc(doc(db, "posts", post.id), { votes: increment(-1) })} className="text-gray-400 hover:text-blue-600 transition-colors"><ArrowBigDown size={28} /></button>
                     </div>
                     <div className="flex flex-col p-3 w-full">
                       <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-2">
-                        <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase">{post.community}</span>
+                        <span 
+                          onClick={() => setActiveCommunity(post.community)}
+                          className="font-bold text-zinc-900 dark:text-zinc-100 uppercase hover:underline cursor-pointer"
+                        >
+                          {post.community}
+                        </span>
                         <span>• u/{post.author} • {formatTime(post.createdAt)}</span>
                       </div>
-                      <h2 className="text-lg font-semibold mb-2">{post.title}</h2>
-                      <div className="flex gap-4 text-xs font-bold text-gray-500">
-                        <button onClick={() => setOpenPostId(openPostId === post.id ? null : post.id)} className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded">
-                          <MessageSquare size={18} /> {post.comments} Şərh
+                      <h2 className="text-lg font-semibold mb-2 leading-tight">{post.title}</h2>
+                      <div className="flex gap-4 text-xs font-bold text-gray-500 mt-auto pt-2">
+                        <button onClick={() => setOpenPostId(openPostId === post.id ? null : post.id)} className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition">
+                          <MessageSquare size={18} /> {post.comments || 0} Şərh
                         </button>
-                        <button className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded"><Share2 size={18} /> Paylaş</button>
+                        <button className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition"><Share2 size={18} /> Paylaş</button>
                       </div>
                     </div>
                   </div>
                   {openPostId === post.id && <InlineComments postId={post.id} user={user} />}
                 </div>
               ))
-            }
+            )}
           </div>
 
-          {/* Sağ tərəf bölməsi (Community qaydaları və s. əlavə edilə bilər) */}
+          {/* Sidebar */}
           <div className="hidden w-1/3 flex-col gap-4 md:flex">
-            <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden">
-               <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-xs px-4">Populyar İcmalar</div>
-               <div className="p-2 flex flex-col gap-2">
+            <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden shadow-sm">
+               <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
+               <div className="p-2 flex flex-col gap-1">
+                  <div 
+                    onClick={() => setActiveCommunity(null)}
+                    className={`flex items-center gap-3 p-2 rounded cursor-pointer transition text-sm font-semibold ${!activeCommunity ? "bg-gray-100 dark:bg-zinc-800" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}
+                  >
+                    🏠 Hamısı (All)
+                  </div>
                   {communities.map(c => (
-                    <div key={c} className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded cursor-pointer transition">
+                    <div 
+                      key={c} 
+                      onClick={() => setActiveCommunity(c)}
+                      className={`flex items-center justify-between p-2 rounded cursor-pointer transition ${activeCommunity === c ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}
+                    >
                       <span className="text-sm font-semibold">{c}</span>
-                      <button className="text-xs bg-blue-600 text-white px-3 py-1 rounded-full font-bold">Qoşul</button>
+                      <ChevronDown size={14} className="-rotate-90 opacity-40" />
                     </div>
                   ))}
                </div>
+            </div>
+            
+            <div className="p-4 bg-white dark:bg-[#1A1A1B] rounded border border-gray-300 dark:border-zinc-800 shadow-sm">
+              <h3 className="text-xs font-bold uppercase mb-2 text-gray-500">Haqqımızda</h3>
+              <p className="text-xs leading-relaxed opacity-70">Reddit.az Azərbaycanın ən aktiv müzakirə platforması olmağı hədəfləyir. İcmalarımıza qoşulun!</p>
             </div>
           </div>
         </main>
