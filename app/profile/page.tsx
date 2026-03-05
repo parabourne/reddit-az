@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { 
   ArrowLeft, MessageSquare, Trash2, Edit3, 
   Sun, Moon, Award, Calendar, Loader2, X,
-  Facebook, LogOut
+  Facebook, LogOut, ArrowBigUp
 } from "lucide-react";
 import { db, auth } from "../lib/firebase"; 
 import { 
@@ -13,6 +13,18 @@ import {
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import Link from "next/link";
 import toast, { Toaster } from "react-hot-toast";
+// VAXT FORMATI ÜÇÜN LAZIM OLANLAR:
+import { formatDistanceToNow } from "date-fns";
+import { az } from "date-fns/locale";
+
+// --- VAXT FUNKSİYASI (Xətanı həll edən hissə) ---
+const formatTime = (timestamp: any) => {
+  if (!timestamp) return "indi";
+  try {
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return formatDistanceToNow(date, { addSuffix: true, locale: az });
+  } catch (err) { return "indi"; }
+};
 
 export default function Profile() {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -27,7 +39,6 @@ export default function Profile() {
       if (currentUser && !currentUser.isAnonymous) {
         setUser(currentUser);
         
-        // İstifadəçinin öz postlarını çəkək
         const q = query(
           collection(db, "posts"),
           where("authorId", "==", currentUser.uid),
@@ -44,7 +55,6 @@ export default function Profile() {
 
         return () => unsubscribePosts();
       } else {
-        // Giriş etməyibsə və ya anonimdirsə ana səhifəyə yönləndir
         const timer = setTimeout(() => {
             if (!auth.currentUser || auth.currentUser.isAnonymous) window.location.href = "/";
         }, 2000);
@@ -86,7 +96,6 @@ export default function Profile() {
       <Toaster position="bottom-right" />
       <div className="bg-[#DAE0E6] dark:bg-[#030303] min-h-screen text-zinc-900 dark:text-zinc-100 font-sans">
         
-        {/* NAVBAR (Home ilə eyni) */}
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
           <Link href="/" className="flex items-center gap-2 cursor-pointer">
             <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">R</div>
@@ -107,13 +116,10 @@ export default function Profile() {
 
         <main className="mx-auto flex max-w-6xl gap-6 p-4 md:p-6">
           <div className="flex w-full flex-col gap-4 md:w-2/3">
-            
-            {/* GERİ QAYITMA LİNKİ */}
             <Link href="/" className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:underline mb-2">
               <ArrowLeft size={14} /> ANA SƏHİFƏYƏ QAYIT
             </Link>
 
-            {/* PROFİL MƏLUMAT KARTI */}
             <div className="flex flex-col gap-4 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-6 shadow-sm">
               <div className="flex items-center gap-4">
                 <img src={user?.photoURL} className="h-20 w-20 rounded-full border-4 border-orange-500" alt="avatar" />
@@ -136,7 +142,6 @@ export default function Profile() {
 
             <h3 className="text-xs font-bold text-gray-500 uppercase px-1 mt-4 tracking-widest">Paylaşımlarım</h3>
 
-            {/* POSTLAR SİYAHISI */}
             {loading ? (
               <div className="space-y-4 animate-pulse">
                 {[1, 2].map(i => <div key={i} className="h-32 bg-gray-200 dark:bg-zinc-800 rounded"></div>)}
@@ -176,7 +181,6 @@ export default function Profile() {
             )}
           </div>
 
-          {/* ASIDE - SAĞ PANEL (Home ilə eyni) */}
           <aside className="hidden w-1/3 flex-col gap-4 md:flex">
             <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden shadow-sm">
                <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
