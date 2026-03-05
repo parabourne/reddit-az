@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { 
   ArrowBigUp, ArrowBigDown, MessageSquare, Share2, 
   Search, Flame, Sun, Moon, Send, ChevronDown, Plus, X,
-  Facebook, LogIn, LogOut 
+  Facebook, LogIn, LogOut, User 
 } from "lucide-react";
 import { db, auth } from "./lib/firebase"; 
 import { 
@@ -21,6 +21,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { az } from "date-fns/locale";
 import toast, { Toaster } from "react-hot-toast";
+import Link from "next/link";
 
 const googleProvider = new GoogleAuthProvider();
 
@@ -47,12 +48,14 @@ function InlineComments({ postId, user }: { postId: string, user: any }) {
 
   const handleAddComment = async () => {
     if (!input.trim()) return;
+    if (user?.isAnonymous) return toast.error("Şərh yazmaq üçün giriş edin!");
     try {
       await addDoc(collection(db, "comments"), {
         postId,
         text: input,
         author: user?.displayName || "Anonim",
         authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
+        authorId: user?.uid,
         createdAt: serverTimestamp()
       });
       await updateDoc(doc(db, "posts", postId), { comments: increment(1) });
@@ -69,10 +72,11 @@ function InlineComments({ postId, user }: { postId: string, user: any }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
-            placeholder="Şərhinizi yazın..." 
-            className="w-full bg-white dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 rounded-full px-4 py-2 text-sm outline-none focus:ring-1 focus:ring-orange-500"
+            placeholder={user?.isAnonymous ? "Şərh yazmaq üçün giriş edin..." : "Şərhinizi yazın..."} 
+            disabled={user?.isAnonymous}
+            className="w-full bg-white dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 rounded-full px-4 py-2 text-sm outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50"
           />
-          <button onClick={handleAddComment} className="absolute right-2 top-1.5 text-orange-600"><Send size={20} /></button>
+          {!user?.isAnonymous && <button onClick={handleAddComment} className="absolute right-2 top-1.5 text-orange-600"><Send size={20} /></button>}
         </div>
       </div>
       <div className="space-y-3">
@@ -119,10 +123,8 @@ export default function Home() {
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-      toast.success("Giriş edildi!");
-    } catch (err) {
-      toast.error("Xəta baş verdi!");
-    }
+      toast.success("Google ilə giriş edildi!");
+    } catch (err) { toast.error("Giriş xətası!"); }
   };
 
   const handleLogout = async () => {
@@ -221,15 +223,15 @@ export default function Home() {
   };
 
   const handleAddPost = async () => {
-    if (!postInput.trim()) return;
-    if (user?.isAnonymous) return toast.error("Paylaşmaq üçün giriş etməlisiniz!");
+    if (!postInput.trim() || user?.isAnonymous) return;
     const loadingToast = toast.loading("Paylaşılır...");
     try {
       await addDoc(collection(db, "posts"), {
         title: postInput,
         community: selectedCommunity,
-        author: user?.displayName || "Anonim",
+        author: user?.displayName || "İstifadəçi",
         authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
+        authorId: user?.uid,
         votes: 1,
         upvotedBy: [user?.uid],
         downvotedBy: [],
@@ -248,8 +250,9 @@ export default function Home() {
       await addDoc(collection(db, "posts"), {
         title: originalPost.title,
         community: selectedCommunity, 
-        author: user?.displayName || "Anonim",
+        author: user?.displayName || "İstifadəçi",
         authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
+        authorId: user?.uid,
         votes: 1,
         upvotedBy: [user?.uid],
         downvotedBy: [],
@@ -300,7 +303,9 @@ export default function Home() {
             </button>
             {user && !user.isAnonymous ? (
               <div className="flex items-center gap-2">
-                <img src={user.photoURL} className="h-8 w-8 rounded-full border dark:border-zinc-700" alt="profile" />
+                <Link href="/profile">
+                  <img src={user.photoURL} className="h-8 w-8 rounded-full border dark:border-zinc-700 cursor-pointer hover:ring-2 hover:ring-orange-500 transition" alt="profile" />
+                </Link>
                 <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-500 transition">
                   <LogOut size={20} />
                 </button>
@@ -423,6 +428,25 @@ export default function Home() {
 
           {/* ASIDE - SAĞ PANEL */}
           <aside className="hidden w-1/3 flex-col gap-4 md:flex">
+            
+            {/* GİRİŞ TƏŞVİQİ BLOKU */}
+            {user?.isAnonymous && (
+              <div className="p-4 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded shadow-lg animate-in fade-in zoom-in duration-300">
+                <h3 className="font-bold mb-1 flex items-center gap-2 text-sm">
+                  <Flame size={18} /> Müzakirələrə qoşulun!
+                </h3>
+                <p className="text-[11px] mb-3 opacity-90 leading-relaxed">
+                  Post paylaşmaq, şərh yazmaq və səs vermək üçün Google ilə giriş etməyiniz kifayətdir.
+                </p>
+                <button 
+                  onClick={handleLogin} 
+                  className="w-full bg-white text-orange-600 py-1.5 rounded-md font-bold text-xs shadow-md hover:bg-gray-100 transition flex items-center justify-center gap-2"
+                >
+                  <LogIn size={14} /> Google ilə daxil ol
+                </button>
+              </div>
+            )}
+
             <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden shadow-sm">
                <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
                <div className="p-2 flex flex-col gap-1">
