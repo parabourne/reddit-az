@@ -483,11 +483,11 @@ export default function Home() {
                    </div>
                    WhatsApp: 055 555 69 63
                 </a>
-                <a href="https://www.facebook.com/parabournex" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold hover:text-blue-500 transition group">
+                <a href="https://www.facebook.com/parabournee" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold hover:text-blue-500 transition group">
                    <div className="bg-blue-100 dark:bg-blue-900/30 p-1.5 rounded-full group-hover:bg-blue-600 transition-colors">
                       <Facebook size={14} className="text-blue-600 group-hover:text-white" />
                    </div>
-                   Facebook: parabournex
+                   Facebook: parabournee
                 </a>
               </div>
             </div>
