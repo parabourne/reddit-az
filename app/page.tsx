@@ -110,8 +110,28 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState("Yeni");
   const [openPostId, setOpenPostId] = useState<string | null>(null);
 
-  const communities = ["r/baku", "r/texnologiya", "r/musiqi", "r/it_azerbaijan", "r/heyat"];
+  
+  // const communities = ["r/baku", "r/texnologiya", "r/musiqi", "r/it_azerbaijan", "r/heyat"];
+// İcmaları saxlamaq üçün yeni state
+const [communities, setCommunities] = useState([]);
 
+// Firebase-dən icmaları real-vaxt rejimində çəkmək
+useEffect(() => {
+  const communitiesRef = collection(db, "communities");
+  const q = query(communitiesRef, orderBy("name", "asc"));
+
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const fetched = snapshot.docs.map(doc => doc.data().name);
+    setCommunities(fetched);
+    
+    // İlkin olaraq bir icma seçilməyibsə, birincini seç
+    if (fetched.length > 0 && !selectedCommunity) {
+      setSelectedCommunity(fetched[0]);
+    }
+  });
+
+  return () => unsubscribe();
+}, []);
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) setUser(currentUser);
