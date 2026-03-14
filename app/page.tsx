@@ -102,7 +102,7 @@ export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [postInput, setPostInput] = useState("");
   const [searchQuery, setSearchQuery] = useState(""); 
-  const [selectedCommunity, setSelectedCommunity] = useState("r/baku");
+  const [selectedCommunity, setSelectedCommunity] = useState(""); // Default boş saxla ki, bazadan gələn dolsun
   const [activeCommunity, setActiveCommunity] = useState<string | null>(null); 
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,28 +110,27 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState("Yeni");
   const [openPostId, setOpenPostId] = useState<string | null>(null);
 
-  
-  // const communities = ["r/baku", "r/texnologiya", "r/musiqi", "r/it_azerbaijan", "r/heyat"];
-// İcmaları saxlamaq üçün yeni state
-const [communities, setCommunities] = useState([]);
+  // Düzəliş 1: TypeScript üçün tip təyini edildi <string[]>
+  const [communities, setCommunities] = useState<string[]>([]);
 
-// Firebase-dən icmaları real-vaxt rejimində çəkmək
-useEffect(() => {
-  const communitiesRef = collection(db, "communities");
-  const q = query(communitiesRef, orderBy("name", "asc"));
+  // Düzəliş 2: İcmaları çəkən useEffect Home daxilində yuxarıda olmalıdır
+  useEffect(() => {
+    const communitiesRef = collection(db, "communities");
+    const q = query(communitiesRef, orderBy("name", "asc"));
 
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const fetched = snapshot.docs.map(doc => doc.data().name);
-    setCommunities(fetched);
-    
-    // İlkin olaraq bir icma seçilməyibsə, birincini seç
-    if (fetched.length > 0 && !selectedCommunity) {
-      setSelectedCommunity(fetched[0]);
-    }
-  });
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => doc.data().name);
+      setCommunities(fetched);
+      
+      // İlkin olaraq bir icma seçilməyibsə, birincini seç
+      if (fetched.length > 0 && !selectedCommunity) {
+        setSelectedCommunity(fetched[0]);
+      }
+    });
 
-  return () => unsubscribe();
-}, []);
+    return () => unsubscribe();
+  }, [selectedCommunity]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) setUser(currentUser);
@@ -190,7 +189,6 @@ useEffect(() => {
     return () => unsubscribe();
   }, [activeFilter, activeCommunity]);
 
-  // AXTARIŞ FİLTRLƏMƏSİ
   const filteredPosts = posts.filter((post) =>
     post.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     post.community?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -298,7 +296,6 @@ useEffect(() => {
             <h1 className="hidden md:block text-xl font-bold tracking-tight">reddit.az</h1>
           </div>
 
-          {/* AXTARIŞ INPUTU */}
           <div className="flex-1 max-w-xl mx-4">
             <div className="relative group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors" size={18} />
@@ -350,7 +347,6 @@ useEffect(() => {
               </div>
             )}
 
-            {/* YENİ POST YARATMA */}
             <div className="flex flex-col gap-3 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" alt="user" />
@@ -377,7 +373,6 @@ useEffect(() => {
               )}
             </div>
 
-            {/* FİLTRLƏR */}
             {!activeCommunity && !searchQuery && (
               <div className="flex gap-2 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-2 overflow-x-auto">
                 {["Trend", "Yeni", "Top"].map((f) => (
@@ -392,7 +387,6 @@ useEffect(() => {
               </div>
             )}
 
-            {/* POSTLAR SİYAHISI */}
             {loading ? (
               <div className="space-y-4 animate-pulse">
                 {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-200 dark:bg-zinc-800 rounded"></div>)}
@@ -446,10 +440,7 @@ useEffect(() => {
             )}
           </div>
 
-          {/* ASIDE - SAĞ PANEL */}
           <aside className="hidden w-1/3 flex-col gap-4 md:flex">
-            
-            {/* GİRİŞ TƏŞVİQİ BLOKU */}
             {user?.isAnonymous && (
               <div className="p-4 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded shadow-lg animate-in fade-in zoom-in duration-300">
                 <h3 className="font-bold mb-1 flex items-center gap-2 text-sm">
