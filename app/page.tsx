@@ -4,13 +4,15 @@ import { useState, useEffect } from "react";
 import { 
   ArrowBigUp, ArrowBigDown, MessageSquare, Share2, 
   Search, Flame, Sun, Moon, Send, ChevronDown, Plus, X,
-  Facebook, LogIn, LogOut, User 
+  Facebook, LogIn, LogOut, User, ImagePlus // ImagePlus əlavə edildi
 } from "lucide-react";
-import { db, auth } from "./lib/firebase"; 
+import { db, auth, storage } from "./lib/firebase"; // storage əlavə edildi
 import { 
   collection, addDoc, updateDoc, doc, query, orderBy, 
   serverTimestamp, onSnapshot, where, increment 
 } from "firebase/firestore";
+// Storage üçün importlar
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { 
   signInAnonymously, 
   onAuthStateChanged, 
@@ -102,32 +104,29 @@ export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [postInput, setPostInput] = useState("");
   const [searchQuery, setSearchQuery] = useState(""); 
-  const [selectedCommunity, setSelectedCommunity] = useState(""); // Default boş saxla ki, bazadan gələn dolsun
+  const [selectedCommunity, setSelectedCommunity] = useState(""); 
   const [activeCommunity, setActiveCommunity] = useState<string | null>(null); 
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [activeFilter, setActiveFilter] = useState("Yeni");
   const [openPostId, setOpenPostId] = useState<string | null>(null);
-
-  // Düzəliş 1: TypeScript üçün tip təyini edildi <string[]>
   const [communities, setCommunities] = useState<string[]>([]);
 
-  // Düzəliş 2: İcmaları çəkən useEffect Home daxilində yuxarıda olmalıdır
+  // Şəkil üçün state-lər
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   useEffect(() => {
     const communitiesRef = collection(db, "communities");
     const q = query(communitiesRef, orderBy("name", "asc"));
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetched = snapshot.docs.map(doc => doc.data().name);
       setCommunities(fetched);
-      
-      // İlkin olaraq bir icma seçilməyibsə, birincini seç
       if (fetched.length > 0 && !selectedCommunity) {
         setSelectedCommunity(fetched[0]);
       }
     });
-
     return () => unsubscribe();
   }, [selectedCommunity]);
 
@@ -154,7 +153,6 @@ export default function Home() {
   useEffect(() => {
     setLoading(true);
     const postsRef = collection(db, "posts");
-    
     let q;
     if (activeCommunity) {
       q = query(postsRef, where("community", "==", activeCommunity), orderBy("createdAt", "desc"));
@@ -166,7 +164,6 @@ export default function Home() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let fetchedPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
       if (activeFilter === "Trend" && !activeCommunity) {
         fetchedPosts = fetchedPosts.sort((a: any, b: any) => {
           const timeA = a.createdAt?.seconds || Date.now() / 1000;
@@ -178,33 +175,64 @@ export default function Home() {
           return scoreB - scoreA;
         });
       }
-
       setPosts(fetchedPosts);
       setLoading(false);
-    }, (error) => {
-      console.error("Firestore xətası:", error);
-      setLoading(false);
     });
-
     return () => unsubscribe();
   }, [activeFilter, activeCommunity]);
 
-  const filteredPosts = posts.filter((post) =>
-    post.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    post.community?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) return toast.error("Maksimum 5MB yükləyə bilərsiniz!");
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleAddPost = async () => {
+    if ((!postInput.trim() && !imageFile) || user?.isAnonymous) return;
+    const loadingToast = toast.loading("Paylaşılır...");
+    
+    try {
+      let imageUrl = "";
+
+      // Əgər şəkil varsa əvvəlcə Storage-ə yükləyirik
+      if (imageFile) {
+        const storageRef = ref(storage, `posts/${Date.now()}_${imageFile.name}`);
+        const uploadTask = await uploadBytesResumable(storageRef, imageFile);
+        imageUrl = await getDownloadURL(uploadTask.ref);
+      }
+
+      await addDoc(collection(db, "posts"), {
+        title: postInput,
+        imageUrl: imageUrl, // URL bazaya yazılır
+        community: selectedCommunity,
+        author: user?.displayName || "İstifadəçi",
+        authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
+        authorId: user?.uid,
+        votes: 1,
+        upvotedBy: [user?.uid],
+        downvotedBy: [],
+        comments: 0,
+        createdAt: serverTimestamp()
+      });
+
+      setPostInput("");
+      setImageFile(null);
+      setImagePreview(null);
+      toast.success("Post paylaşıldı!", { id: loadingToast });
+    } catch (err) { toast.error("Xəta!", { id: loadingToast }); }
+  };
 
   const handleVote = async (postId: string, direction: 'up' | 'down') => {
     if (!user || user.isAnonymous) return toast.error("Səs vermək üçün giriş etməlisiniz!");
-
     const postRef = doc(db, "posts", postId);
     const post = posts.find(p => p.id === postId);
     if (!post) return;
-
     const userId = user.uid;
     const upvotedBy = post.upvotedBy || [];
     const downvotedBy = post.downvotedBy || [];
-
     let newVotes = post.votes || 0;
     let newUpvotedBy = [...upvotedBy];
     let newDownvotedBy = [...downvotedBy];
@@ -230,35 +258,8 @@ export default function Home() {
     }
 
     try {
-      await updateDoc(postRef, {
-        votes: newVotes,
-        upvotedBy: newUpvotedBy,
-        downvotedBy: newDownvotedBy
-      });
-    } catch (err) {
-      toast.error("Xəta baş verdi!");
-    }
-  };
-
-  const handleAddPost = async () => {
-    if (!postInput.trim() || user?.isAnonymous) return;
-    const loadingToast = toast.loading("Paylaşılır...");
-    try {
-      await addDoc(collection(db, "posts"), {
-        title: postInput,
-        community: selectedCommunity,
-        author: user?.displayName || "İstifadəçi",
-        authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
-        authorId: user?.uid,
-        votes: 1,
-        upvotedBy: [user?.uid],
-        downvotedBy: [],
-        comments: 0,
-        createdAt: serverTimestamp()
-      });
-      setPostInput("");
-      toast.success("Post paylaşıldı!", { id: loadingToast });
-    } catch (err) { toast.error("Xəta!", { id: loadingToast }); }
+      await updateDoc(postRef, { votes: newVotes, upvotedBy: newUpvotedBy, downvotedBy: newDownvotedBy });
+    } catch (err) { toast.error("Xəta!"); }
   };
 
   const handleCrosspost = async (originalPost: any) => {
@@ -267,6 +268,7 @@ export default function Home() {
     try {
       await addDoc(collection(db, "posts"), {
         title: originalPost.title,
+        imageUrl: originalPost.imageUrl || "",
         community: selectedCommunity, 
         author: user?.displayName || "İstifadəçi",
         authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
@@ -281,8 +283,13 @@ export default function Home() {
         originalCommunity: originalPost.community
       });
       toast.success("Uğurla yenidən paylaşıldı!", { id: loadingToast });
-    } catch (err) { toast.error("Paylaşarkən xəta!", { id: loadingToast }); }
+    } catch (err) { toast.error("Xəta!", { id: loadingToast }); }
   };
+
+  const filteredPosts = posts.filter((post) =>
+    post.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    post.community?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className={`${isDarkMode ? "dark" : ""} min-h-screen transition-colors duration-300`}>
@@ -347,6 +354,7 @@ export default function Home() {
               </div>
             )}
 
+            {/* POST PAYLAŞMA BÖLMƏSİ */}
             <div className="flex flex-col gap-3 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" alt="user" />
@@ -358,7 +366,27 @@ export default function Home() {
                   disabled={user?.isAnonymous}
                   className="flex-1 rounded-md bg-gray-100 dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all disabled:opacity-50" 
                 />
+                {!user?.isAnonymous && (
+                  <label className="cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 p-2 rounded-full transition-colors text-blue-500">
+                    <ImagePlus size={22} />
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                  </label>
+                )}
               </div>
+
+              {/* ŞƏKİL ÖNİZLƏMƏ */}
+              {imagePreview && (
+                <div className="relative mt-2 w-full max-h-72 overflow-hidden rounded-lg border dark:border-zinc-700 shadow-inner bg-gray-50 dark:bg-zinc-900 flex justify-center">
+                  <img src={imagePreview} className="max-h-72 object-contain" alt="preview" />
+                  <button 
+                    onClick={() => {setImageFile(null); setImagePreview(null);}}
+                    className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full hover:bg-black transition"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
               {!user?.isAnonymous && (
                 <div className="flex justify-between items-center border-t dark:border-zinc-800 pt-3">
                   <select 
@@ -419,6 +447,14 @@ export default function Home() {
                         <span>• u/{post.author} • {formatTime(post.createdAt)}</span>
                       </div>
                       <h2 className="text-lg font-semibold mb-2 leading-tight">{post.title}</h2>
+                      
+                      {/* POST ŞƏKLİ */}
+                      {post.imageUrl && (
+                        <div className="my-3 rounded-lg overflow-hidden bg-gray-100 dark:bg-zinc-900 flex justify-center border dark:border-zinc-800">
+                           <img src={post.imageUrl} className="max-h-[512px] object-contain w-full" alt={post.title} />
+                        </div>
+                      )}
+
                       {post.isCrosspost && (
                         <div className="mb-3 p-2 border-l-4 border-orange-500 bg-gray-50 dark:bg-zinc-900/50 rounded-r text-[11px]">
                            <p className="text-gray-500 italic">Yenidən paylaşıldı: <span className="font-bold text-orange-600">{post.originalCommunity}</span> • u/{post.originalAuthor}</p>
