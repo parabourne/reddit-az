@@ -17,7 +17,11 @@ export const metadata: Metadata = {
   title: "Reddit.az — Azərbaycanın Müzakirə Platforması",
   description: "Maraqlı icmalara qoşulun, şəkillər paylaşın və fikirlərinizi bölüşün.",
   icons: {
-    icon: "/favicon.ico", // Əgər adını icon.png qoymusansa, bura /icon.png yaz
+    // Səndəki fayl icon.jpg olduğu üçün yolu belə yazırıq. 
+    // ?v=4 əlavə etmək brauzeri yeni şəkli yükləməyə məcbur edir.
+    icon: "/icon.jpg?v=4", 
+    shortcut: "/icon.jpg",
+    apple: "/icon.jpg",
   },
 };
 
@@ -27,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="az"> {/* Dil Azərbaycancaya dəyişdirildi */}
+    <html lang="az">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
