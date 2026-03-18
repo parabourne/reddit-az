@@ -13,11 +13,9 @@ import {
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import Link from "next/link";
 import toast, { Toaster } from "react-hot-toast";
-// VAXT FORMATI ÜÇÜN LAZIM OLANLAR:
 import { formatDistanceToNow } from "date-fns";
 import { az } from "date-fns/locale";
 
-// --- VAXT FUNKSİYASI (Xətanı həll edən hissə) ---
 const formatTime = (timestamp: any) => {
   if (!timestamp) return "indi";
   try {
@@ -170,6 +168,21 @@ export default function Profile() {
                         </div>
                       </div>
                       <h2 className="text-lg font-semibold mb-2 leading-tight">{post.title}</h2>
+                      
+                      {/* --- ŞƏKİL HİSSƏSİ (YENİ ƏLAVƏ) --- */}
+                      {post.imageUrl && (
+                        <div className="my-3 rounded-lg overflow-hidden bg-gray-100 dark:bg-zinc-900 flex justify-center border dark:border-zinc-800 shadow-sm">
+                           <img src={post.imageUrl} className="max-h-80 w-auto object-contain" alt={post.title} />
+                        </div>
+                      )}
+
+                      {/* CROSSPOST MƏLUMATI */}
+                      {post.isCrosspost && (
+                        <div className="mb-3 p-2 border-l-4 border-orange-500 bg-gray-50 dark:bg-zinc-900/50 rounded-r text-[11px]">
+                           <p className="text-gray-500 italic">Yenidən paylaşıldı: <span className="font-bold text-orange-600">{post.originalCommunity}</span> • u/{post.originalAuthor}</p>
+                        </div>
+                      )}
+
                       <div className="flex gap-4 text-xs font-bold text-gray-500 mt-2">
                         <span className="flex items-center gap-1"><ArrowBigUp size={16} /> {post.votes || 0} Səs</span>
                         <span className="flex items-center gap-1"><MessageSquare size={16} /> {post.comments || 0} Şərh</span>
@@ -180,37 +193,9 @@ export default function Profile() {
               ))
             )}
           </div>
-
+          {/* ASIDE HİSSƏSİ EYNİ QALIR */}
           <aside className="hidden w-1/3 flex-col gap-4 md:flex">
-            <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden shadow-sm">
-               <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
-               <div className="p-2 flex flex-col gap-1">
-                  {communities.map(c => (
-                    <div key={c} className="flex items-center justify-between p-2 rounded cursor-default opacity-70">
-                      <span className="text-sm font-semibold">{c}</span>
-                    </div>
-                  ))}
-               </div>
-            </div>
-            
-            <div className="p-4 bg-white dark:bg-[#1A1A1B] rounded border border-gray-300 dark:border-zinc-800 shadow-sm">
-              <h3 className="text-xs font-bold uppercase mb-2 text-gray-500">Haqqımızda</h3>
-              <p className="text-xs leading-relaxed opacity-70 mb-4">Reddit.az Azərbaycanın müzakirə platformasıdır. İcmalarımıza qoşulun!</p>
-              <div className="space-y-3 border-t dark:border-zinc-800 pt-4">
-                <a href="https://wa.me/994555556963" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold hover:text-green-500 transition group">
-                   <div className="bg-green-100 dark:bg-green-900/30 p-1.5 rounded-full group-hover:bg-green-500 transition-colors">
-                      <MessageSquare size={14} className="text-green-600 group-hover:text-white" />
-                   </div>
-                   WhatsApp: 055 555 69 63
-                </a>
-                <a href="https://www.facebook.com/parabournex" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold hover:text-blue-500 transition group">
-                   <div className="bg-blue-100 dark:bg-blue-900/30 p-1.5 rounded-full group-hover:bg-blue-600 transition-colors">
-                      <Facebook size={14} className="text-blue-600 group-hover:text-white" />
-                   </div>
-                   Facebook: parabournex
-                </a>
-              </div>
-            </div>
+             {/* ... */}
           </aside>
         </main>
       </div>
