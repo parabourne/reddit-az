@@ -4,14 +4,13 @@ import { useState, useEffect } from "react";
 import { 
   ArrowBigUp, ArrowBigDown, MessageSquare, Share2, 
   Search, Flame, Sun, Moon, Send, ChevronDown, Plus, X,
-  Facebook, LogIn, LogOut, User, ImagePlus // ImagePlus əlavə edildi
+  Facebook, LogIn, LogOut, User, ImagePlus 
 } from "lucide-react";
-import { db, auth, storage } from "./lib/firebase"; // storage əlavə edildi
+import { db, auth, storage } from "./lib/firebase"; 
 import { 
   collection, addDoc, updateDoc, doc, query, orderBy, 
   serverTimestamp, onSnapshot, where, increment 
 } from "firebase/firestore";
-// Storage üçün importlar
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { 
   signInAnonymously, 
@@ -35,7 +34,6 @@ const formatTime = (timestamp: any) => {
   } catch (err) { return "indi"; }
 };
 
-// --- Şərh Komponenti ---
 function InlineComments({ postId, user }: { postId: string, user: any }) {
   const [comments, setComments] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -99,7 +97,6 @@ function InlineComments({ postId, user }: { postId: string, user: any }) {
   );
 }
 
-// --- Ana Səhifə ---
 export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [postInput, setPostInput] = useState("");
@@ -112,10 +109,22 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState("Yeni");
   const [openPostId, setOpenPostId] = useState<string | null>(null);
   const [communities, setCommunities] = useState<string[]>([]);
-
-  // Şəkil üçün state-lər
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  // Məlumat pəncərəsi üçün state-lər
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [countdown, setCountdown] = useState(10);
+
+  // Geriyə sayım məntiqi
+  useEffect(() => {
+    if (showWelcome && countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0) {
+      setShowWelcome(false);
+    }
+  }, [countdown, showWelcome]);
 
   useEffect(() => {
     const communitiesRef = collection(db, "communities");
@@ -193,20 +202,16 @@ export default function Home() {
   const handleAddPost = async () => {
     if ((!postInput.trim() && !imageFile) || user?.isAnonymous) return;
     const loadingToast = toast.loading("Paylaşılır...");
-    
     try {
       let imageUrl = "";
-
-      // Əgər şəkil varsa əvvəlcə Storage-ə yükləyirik
       if (imageFile) {
         const storageRef = ref(storage, `posts/${Date.now()}_${imageFile.name}`);
         const uploadTask = await uploadBytesResumable(storageRef, imageFile);
         imageUrl = await getDownloadURL(uploadTask.ref);
       }
-
       await addDoc(collection(db, "posts"), {
         title: postInput,
-        imageUrl: imageUrl, // URL bazaya yazılır
+        imageUrl: imageUrl,
         community: selectedCommunity,
         author: user?.displayName || "İstifadəçi",
         authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
@@ -217,7 +222,6 @@ export default function Home() {
         comments: 0,
         createdAt: serverTimestamp()
       });
-
       setPostInput("");
       setImageFile(null);
       setImagePreview(null);
@@ -256,7 +260,6 @@ export default function Home() {
         newUpvotedBy = newUpvotedBy.filter(id => id !== userId);
       }
     }
-
     try {
       await updateDoc(postRef, { votes: newVotes, upvotedBy: newUpvotedBy, downvotedBy: newDownvotedBy });
     } catch (err) { toast.error("Xəta!"); }
@@ -294,9 +297,41 @@ export default function Home() {
   return (
     <div className={`${isDarkMode ? "dark" : ""} min-h-screen transition-colors duration-300`}>
       <Toaster position="bottom-right" />
+
+      {/* XOŞ GƏLDİN MODALI (YENİ) */}
+      {showWelcome && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-md transform rounded-2xl bg-white dark:bg-[#1A1A1B] p-8 shadow-2xl animate-in zoom-in duration-300 border border-orange-500/20 text-center">
+            <button 
+              onClick={() => setShowWelcome(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-white transition"
+            >
+              <X size={20} />
+            </button>
+            <div className="bg-orange-600 p-3 rounded-full text-white mx-auto w-fit mb-4 shadow-lg shadow-orange-500/20">
+              <Flame size={32} />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Reddit.az-a Xoş Gəlmisiniz!</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
+              Bu platforma Azərbaycanın ən aktiv müzakirə mərkəzidir. Burada maraqlı icmalara qoşula, 
+              şəkil və fikirlərinizi paylaşa, digər istifadəçilərlə fikir mübadiləsi apara bilərsiniz.
+            </p>
+            <button 
+              onClick={() => setShowWelcome(false)}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl transition shadow-md active:scale-95 mb-4"
+            >
+              Anladım, başlayaq!
+            </button>
+            <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-400 uppercase tracking-widest">
+              <div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />
+              Pəncərə {countdown} saniyəyə bağlanacaq
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-[#DAE0E6] dark:bg-[#030303] min-h-screen text-zinc-900 dark:text-zinc-100 font-sans">
         
-        {/* NAVBAR */}
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveCommunity(null); setSearchQuery("");}}>
             <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">R</div>
@@ -354,7 +389,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* POST PAYLAŞMA BÖLMƏSİ */}
             <div className="flex flex-col gap-3 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" alt="user" />
@@ -374,15 +408,14 @@ export default function Home() {
                 )}
               </div>
 
-              {/* ŞƏKİL ÖNİZLƏMƏ */}
               {imagePreview && (
-                <div className="relative mt-2 w-full max-h-72 overflow-hidden rounded-lg border dark:border-zinc-700 shadow-inner bg-gray-50 dark:bg-zinc-900 flex justify-center">
-                  <img src={imagePreview} className="max-h-72 object-contain" alt="preview" />
+                <div className="relative mt-2 w-full flex justify-center overflow-hidden rounded-lg border dark:border-zinc-700 bg-gray-50 dark:bg-zinc-900 shadow-inner">
+                  <img src={imagePreview} className="max-h-48 w-auto object-contain p-1" alt="preview" />
                   <button 
                     onClick={() => {setImageFile(null); setImagePreview(null);}}
-                    className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full hover:bg-black transition"
+                    className="absolute top-1 right-1 bg-black/50 text-white p-1.5 rounded-full hover:bg-black transition"
                   >
-                    <X size={16} />
+                    <X size={14} />
                   </button>
                 </div>
               )}
@@ -448,10 +481,9 @@ export default function Home() {
                       </div>
                       <h2 className="text-lg font-semibold mb-2 leading-tight">{post.title}</h2>
                       
-                      {/* POST ŞƏKLİ */}
                       {post.imageUrl && (
-                        <div className="my-3 rounded-lg overflow-hidden bg-gray-100 dark:bg-zinc-900 flex justify-center border dark:border-zinc-800">
-                           <img src={post.imageUrl} className="max-h-[512px] object-contain w-full" alt={post.title} />
+                        <div className="my-3 rounded-lg overflow-hidden bg-gray-100 dark:bg-zinc-900 flex justify-center border dark:border-zinc-800 shadow-sm">
+                           <img src={post.imageUrl} className="max-h-80 w-auto object-contain" alt={post.title} />
                         </div>
                       )}
 
