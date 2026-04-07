@@ -4,12 +4,12 @@ import { useState, useEffect } from "react";
 import { 
   ArrowBigUp, ArrowBigDown, MessageSquare, Share2, 
   Search, Flame, Sun, Moon, Send, ChevronDown, Plus, X,
-  Facebook, LogIn, LogOut, User, ImagePlus 
+  Facebook, LogIn, LogOut, User, ImagePlus, Loader2 
 } from "lucide-react";
 import { db, auth, storage } from "./lib/firebase"; 
 import { 
   collection, addDoc, updateDoc, doc, query, orderBy, 
-  serverTimestamp, onSnapshot, where, increment 
+  serverTimestamp, onSnapshot, where, increment, getDoc, setDoc 
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { 
@@ -34,6 +34,7 @@ const formatTime = (timestamp: any) => {
   } catch (err) { return "indi"; }
 };
 
+// --- KOMMENT KOMPONENTİ ---
 function InlineComments({ postId, user }: { postId: string, user: any }) {
   const [comments, setComments] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -97,6 +98,7 @@ function InlineComments({ postId, user }: { postId: string, user: any }) {
   );
 }
 
+// --- ANA SƏHİFƏ KOMPONENTİ ---
 export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [postInput, setPostInput] = useState("");
@@ -112,11 +114,14 @@ export default function Home() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // Məlumat pəncərəsi üçün state-lər
+  // --- INVITE SİSTEMİ ÜÇÜN STATE-LƏR ---
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [checkingInvite, setCheckingInvite] = useState(false);
+
   const [showWelcome, setShowWelcome] = useState(true);
   const [countdown, setCountdown] = useState(10);
 
-  // Geriyə sayım məntiqi
   useEffect(() => {
     if (showWelcome && countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
@@ -139,26 +144,82 @@ export default function Home() {
     return () => unsubscribe();
   }, [selectedCommunity]);
 
+  // Auth və Access Yoxlaması
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) setUser(currentUser);
-      else await signInAnonymously(auth);
+      if (currentUser && !currentUser.isAnonymous) {
+        setUser(currentUser);
+        // Bazadan hasAccess yoxla
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+          setHasAccess(userDoc.data().hasAccess);
+        } else {
+          setHasAccess(false);
+        }
+      } else {
+        setUser(null);
+        setHasAccess(true); // Qonaqlar üçün ana səhifə görünür qalsın
+        await signInAnonymously(auth);
+      }
     });
     return () => unsubscribe();
   }, []);
 
   const handleLogin = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
-      toast.success("Google ilə giriş edildi!");
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      // Bazada yoxla və hasAccess: false ilə yarat
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          hasAccess: false,
+          createdAt: serverTimestamp(),
+        });
+        toast.success("Xoş gəldiniz! İndi dəvət kodunuzu daxil edin.");
+      }
     } catch (err) { toast.error("Giriş xətası!"); }
+  };
+
+  const handleVerifyInvite = async () => {
+    if (!inviteCode.trim() || !user) return;
+    setCheckingInvite(true);
+    try {
+      const inviteRef = doc(db, "invites", inviteCode.trim());
+      const inviteDoc = await getDoc(inviteRef);
+
+      if (inviteDoc.exists() && !inviteDoc.data().isUsed) {
+        // Kodu istifadə et və istifadəçiyə icazə ver
+        await updateDoc(inviteRef, {
+          isUsed: true,
+          usedBy: user.uid,
+          usedAt: serverTimestamp()
+        });
+        await updateDoc(doc(db, "users", user.uid), { hasAccess: true });
+        
+        setHasAccess(true);
+        toast.success("Uğurlu giriş! Kluba xoş gəldiniz.");
+      } else {
+        toast.error("Kod yanlışdır və ya artıq istifadə olunub!");
+      }
+    } catch (err) { toast.error("Xəta baş verdi!"); }
+    finally { setCheckingInvite(false); }
   };
 
   const handleLogout = async () => {
     await signOut(auth);
+    setHasAccess(true);
     toast.success("Çıxış edildi");
   };
 
+  // Postları çəkmə useEffect eyni qalır
   useEffect(() => {
     setLoading(true);
     const postsRef = collection(db, "posts");
@@ -294,18 +355,49 @@ export default function Home() {
     post.community?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // --- KİLİDLİ EKRAN (INVITE GUARD) ---
+  if (user && !user.isAnonymous && hasAccess === false) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#DAE0E6] dark:bg-[#030303] p-4">
+        <div className="w-full max-w-md bg-white dark:bg-[#1A1A1B] p-8 rounded-2xl shadow-2xl border border-orange-500/30 text-center animate-in zoom-in duration-300">
+          <div className="bg-orange-100 dark:bg-orange-900/20 p-4 rounded-full w-fit mx-auto mb-4">
+            <LogIn className="text-orange-600" size={32} />
+          </div>
+          <h2 className="text-2xl font-bold mb-4">Məxfi Giriş 🔒</h2>
+          <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+            Reddit.az-ın bu bölməsi yalnız dəvətnaməsi olan tələbələr üçündür. 
+            Zəhmət olmasa dostunuzdan aldığınız kodu daxil edin.
+          </p>
+          <input 
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleVerifyInvite()}
+            placeholder="Dəvət kodunu yazın..."
+            className="w-full bg-gray-100 dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 rounded-xl px-4 py-3 mb-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all text-center font-mono tracking-widest uppercase"
+          />
+          <button 
+            onClick={handleVerifyInvite}
+            disabled={checkingInvite}
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg active:scale-95"
+          >
+            {checkingInvite ? <Loader2 className="animate-spin" /> : "Girişi Təsdiqlə"}
+          </button>
+          <button onClick={handleLogout} className="mt-6 text-xs text-gray-400 hover:text-red-500 underline transition">Başqa hesabla daxil ol</button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- ANA RENDER ---
   return (
     <div className={`${isDarkMode ? "dark" : ""} min-h-screen transition-colors duration-300`}>
       <Toaster position="bottom-right" />
 
-      {/* XOŞ GƏLDİN MODALI (YENİ) */}
+      {/* XOŞ GƏLDİN MODALI */}
       {showWelcome && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="relative w-full max-w-md transform rounded-2xl bg-white dark:bg-[#1A1A1B] p-8 shadow-2xl animate-in zoom-in duration-300 border border-orange-500/20 text-center">
-            <button 
-              onClick={() => setShowWelcome(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-white transition"
-            >
+            <button onClick={() => setShowWelcome(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-white transition">
               <X size={20} />
             </button>
             <div className="bg-orange-600 p-3 rounded-full text-white mx-auto w-fit mb-4 shadow-lg shadow-orange-500/20">
@@ -313,13 +405,9 @@ export default function Home() {
             </div>
             <h2 className="text-2xl font-bold mb-2">Reddit.az-a Xoş Gəlmisiniz!</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
-              Bu platforma Azərbaycanın ən aktiv müzakirə mərkəzidir. Burada maraqlı icmalara qoşula, 
-              şəkil və fikirlərinizi paylaşa, digər istifadəçilərlə fikir mübadiləsi apara bilərsiniz.
+              Bu platforma Azərbaycanın ən aktiv müzakirə mərkəzidir. Bura giriş hələlik yalnız dəvətnamə ilədir.
             </p>
-            <button 
-              onClick={() => setShowWelcome(false)}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl transition shadow-md active:scale-95 mb-4"
-            >
+            <button onClick={() => setShowWelcome(false)} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl transition shadow-md active:scale-95 mb-4">
               Anladım, başlayaq!
             </button>
             <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-400 uppercase tracking-widest">
@@ -331,7 +419,7 @@ export default function Home() {
       )}
 
       <div className="bg-[#DAE0E6] dark:bg-[#030303] min-h-screen text-zinc-900 dark:text-zinc-100 font-sans">
-        
+        {/* NAV BAR */}
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveCommunity(null); setSearchQuery("");}}>
             <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">R</div>
@@ -377,9 +465,9 @@ export default function Home() {
           </div>
         </nav>
 
+        {/* MAIN CONTENT */}
         <main className="mx-auto flex max-w-6xl gap-6 p-4 md:p-6">
           <div className="flex w-full flex-col gap-4 md:w-2/3">
-            
             {activeCommunity && (
               <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-md shadow-sm">
                 <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">Göstərilir: <span className="underline">{activeCommunity}</span></p>
@@ -389,6 +477,7 @@ export default function Home() {
               </div>
             )}
 
+            {/* PAYLAŞIM INPUTU */}
             <div className="flex flex-col gap-3 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" alt="user" />
@@ -411,12 +500,7 @@ export default function Home() {
               {imagePreview && (
                 <div className="relative mt-2 w-full flex justify-center overflow-hidden rounded-lg border dark:border-zinc-700 bg-gray-50 dark:bg-zinc-900 shadow-inner">
                   <img src={imagePreview} className="max-h-48 w-auto object-contain p-1" alt="preview" />
-                  <button 
-                    onClick={() => {setImageFile(null); setImagePreview(null);}}
-                    className="absolute top-1 right-1 bg-black/50 text-white p-1.5 rounded-full hover:bg-black transition"
-                  >
-                    <X size={14} />
-                  </button>
+                  <button onClick={() => {setImageFile(null); setImagePreview(null);}} className="absolute top-1 right-1 bg-black/50 text-white p-1.5 rounded-full hover:bg-black transition"><X size={14} /></button>
                 </div>
               )}
 
@@ -434,6 +518,7 @@ export default function Home() {
               )}
             </div>
 
+            {/* FİLTERLƏR */}
             {!activeCommunity && !searchQuery && (
               <div className="flex gap-2 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-2 overflow-x-auto">
                 {["Trend", "Yeni", "Top"].map((f) => (
@@ -448,6 +533,7 @@ export default function Home() {
               </div>
             )}
 
+            {/* POSTLARIN SİYAHISI */}
             {loading ? (
               <div className="space-y-4 animate-pulse">
                 {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-200 dark:bg-zinc-800 rounded"></div>)}
@@ -455,12 +541,13 @@ export default function Home() {
             ) : filteredPosts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-[#1A1A1B] rounded border border-dashed border-gray-300 dark:border-zinc-800">
                 <Search size={48} className="text-gray-200 mb-4" />
-                <p className="text-gray-500 font-medium">"{searchQuery}" üçün heç bir nəticə tapılmadı.</p>
+                <p className="text-gray-500 font-medium">Nəticə tapılmadı.</p>
               </div>
             ) : (
               filteredPosts.map((post) => (
                 <div key={post.id} className="flex flex-col rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] shadow-sm hover:border-gray-400 dark:hover:border-zinc-600 transition-colors overflow-hidden">
                   <div className="flex">
+                    {/* VOTE HİSSƏSİ */}
                     <div className="flex w-10 flex-col items-center bg-gray-50 dark:bg-[#151516] p-2 border-r dark:border-zinc-800">
                       <button onClick={() => handleVote(post.id, 'up')} className={`${post.upvotedBy?.includes(user?.uid) ? "text-orange-600" : "text-gray-400"} hover:bg-gray-200 dark:hover:bg-zinc-800 rounded p-1 transition`}>
                         <ArrowBigUp size={28} fill={post.upvotedBy?.includes(user?.uid) ? "currentColor" : "none"} />
@@ -472,24 +559,16 @@ export default function Home() {
                         <ArrowBigDown size={28} fill={post.downvotedBy?.includes(user?.uid) ? "currentColor" : "none"} />
                       </button>
                     </div>
+                    {/* POST MƏZMUNU */}
                     <div className="flex flex-col p-3 w-full">
                       <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-2">
-                        <span onClick={() => setActiveCommunity(post.community)} className="font-bold text-zinc-900 dark:text-zinc-100 uppercase hover:underline cursor-pointer">
-                          {post.community}
-                        </span>
+                        <span onClick={() => setActiveCommunity(post.community)} className="font-bold text-zinc-900 dark:text-zinc-100 uppercase hover:underline cursor-pointer">{post.community}</span>
                         <span>• u/{post.author} • {formatTime(post.createdAt)}</span>
                       </div>
                       <h2 className="text-lg font-semibold mb-2 leading-tight">{post.title}</h2>
-                      
                       {post.imageUrl && (
                         <div className="my-3 rounded-lg overflow-hidden bg-gray-100 dark:bg-zinc-900 flex justify-center border dark:border-zinc-800 shadow-sm">
                            <img src={post.imageUrl} className="max-h-80 w-auto object-contain" alt={post.title} />
-                        </div>
-                      )}
-
-                      {post.isCrosspost && (
-                        <div className="mb-3 p-2 border-l-4 border-orange-500 bg-gray-50 dark:bg-zinc-900/50 rounded-r text-[11px]">
-                           <p className="text-gray-500 italic">Yenidən paylaşıldı: <span className="font-bold text-orange-600">{post.originalCommunity}</span> • u/{post.originalAuthor}</p>
                         </div>
                       )}
                       <div className="flex gap-4 text-xs font-bold text-gray-500 mt-auto pt-2">
@@ -508,56 +587,34 @@ export default function Home() {
             )}
           </div>
 
+          {/* ASIDE SİDEBAR */}
           <aside className="hidden w-1/3 flex-col gap-4 md:flex">
             {user?.isAnonymous && (
               <div className="p-4 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded shadow-lg animate-in fade-in zoom-in duration-300">
-                <h3 className="font-bold mb-1 flex items-center gap-2 text-sm">
-                  <Flame size={18} /> Müzakirələrə qoşulun!
-                </h3>
-                <p className="text-[11px] mb-3 opacity-90 leading-relaxed">
-                  Post paylaşmaq, şərh yazmaq və səs vermək üçün Google ilə giriş etməyiniz kifayətdir.
-                </p>
-                <button 
-                  onClick={handleLogin} 
-                  className="w-full bg-white text-orange-600 py-1.5 rounded-md font-bold text-xs shadow-md hover:bg-gray-100 transition flex items-center justify-center gap-2"
-                >
+                <h3 className="font-bold mb-1 flex items-center gap-2 text-sm"><Flame size={18} /> Müzakirələrə qoşulun!</h3>
+                <p className="text-[11px] mb-3 opacity-90 leading-relaxed">Giriş hələlik yalnız dəvətnamə ilədir.</p>
+                <button onClick={handleLogin} className="w-full bg-white text-orange-600 py-1.5 rounded-md font-bold text-xs shadow-md hover:bg-gray-100 transition flex items-center justify-center gap-2">
                   <LogIn size={14} /> Google ilə daxil ol
                 </button>
               </div>
             )}
 
             <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden shadow-sm">
-               <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
-               <div className="p-2 flex flex-col gap-1">
-                  <div onClick={() => setActiveCommunity(null)} className={`flex items-center gap-3 p-2 rounded cursor-pointer transition text-sm font-semibold ${!activeCommunity ? "bg-gray-100 dark:bg-zinc-800" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}>
-                    🏠 Hamısı (All)
-                  </div>
-                  {communities.map(c => (
+                <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
+                <div className="p-2 flex flex-col gap-1">
+                   <div onClick={() => setActiveCommunity(null)} className={`flex items-center gap-3 p-2 rounded cursor-pointer transition text-sm font-semibold ${!activeCommunity ? "bg-gray-100 dark:bg-zinc-800" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}>🏠 Hamısı</div>
+                   {communities.map(c => (
                     <div key={c} onClick={() => setActiveCommunity(c)} className={`flex items-center justify-between p-2 rounded cursor-pointer transition ${activeCommunity === c ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}>
                       <span className="text-sm font-semibold">{c}</span>
                       <ChevronDown size={14} className="-rotate-90 opacity-40" />
                     </div>
                   ))}
-               </div>
+                </div>
             </div>
             
-            <div className="p-4 bg-white dark:bg-[#1A1A1B] rounded border border-gray-300 dark:border-zinc-800 shadow-sm">
-              <h3 className="text-xs font-bold uppercase mb-2 text-gray-500">Haqqımızda</h3>
-              <p className="text-xs leading-relaxed opacity-70 mb-4">Reddit.az Azərbaycanın müzakirə platformasıdır. İcmalarımıza qoşulun!</p>
-              <div className="space-y-3 border-t dark:border-zinc-800 pt-4">
-                <a href="https://wa.me/994555556963" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold hover:text-green-500 transition group">
-                   <div className="bg-green-100 dark:bg-green-900/30 p-1.5 rounded-full group-hover:bg-green-500 transition-colors">
-                      <MessageSquare size={14} className="text-green-600 group-hover:text-white" />
-                   </div>
-                   WhatsApp: 055 555 69 63
-                </a>
-                <a href="https://www.facebook.com/parabournee" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs font-semibold hover:text-blue-500 transition group">
-                   <div className="bg-blue-100 dark:bg-blue-900/30 p-1.5 rounded-full group-hover:bg-blue-600 transition-colors">
-                      <Facebook size={14} className="text-blue-600 group-hover:text-white" />
-                   </div>
-                   Facebook: parabournee
-                </a>
-              </div>
+            <div className="p-4 bg-white dark:bg-[#1A1A1B] rounded border border-gray-300 dark:border-zinc-800 shadow-sm text-xs opacity-70">
+              <h3 className="font-bold uppercase mb-2">Haqqımızda</h3>
+              <p>Reddit.az - Azərbaycanın müzakirə platforması.</p>
             </div>
           </aside>
         </main>
