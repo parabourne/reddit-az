@@ -365,7 +365,7 @@ export default function Home() {
           </div>
           <h2 className="text-2xl font-bold mb-4">Məxfi Giriş 🔒</h2>
           <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-            Reddit.az-ın bu bölməsi yalnız dəvətnaməsi olan tələbələr üçündür. 
+            Modlam.com-un bu bölməsi yalnız dəvətnaməsi olan tələbələr üçündür. 
             Zəhmət olmasa dostunuzdan aldığınız kodu daxil edin.
           </p>
           <input 
@@ -403,7 +403,7 @@ export default function Home() {
             <div className="bg-orange-600 p-3 rounded-full text-white mx-auto w-fit mb-4 shadow-lg shadow-orange-500/20">
               <Flame size={32} />
             </div>
-            <h2 className="text-2xl font-bold mb-2">Reddit.az-a Xoş Gəlmisiniz!</h2>
+            <h2 className="text-2xl font-bold mb-2">Modlam.com-a Xoş Gəlmisiniz!</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
               Bu platforma Azərbaycanın ən aktiv müzakirə mərkəzidir. Bura giriş hələlik yalnız dəvətnamə ilədir.
             </p>
@@ -423,7 +423,7 @@ export default function Home() {
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveCommunity(null); setSearchQuery("");}}>
             <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">R</div>
-            <h1 className="hidden md:block text-xl font-bold tracking-tight">reddit.az</h1>
+            <h1 className="hidden md:block text-xl font-bold tracking-tight">modlam.com</h1>
           </div>
 
           <div className="flex-1 max-w-xl mx-4">
@@ -614,7 +614,7 @@ export default function Home() {
             
             <div className="p-4 bg-white dark:bg-[#1A1A1B] rounded border border-gray-300 dark:border-zinc-800 shadow-sm text-xs opacity-70">
               <h3 className="font-bold uppercase mb-2">Haqqımızda</h3>
-              <p>Reddit.az - Azərbaycanın müzakirə platforması.</p>
+              <p>Modlam.com - Azərbaycanın müzakirə platforması.</p>
             </div>
           </aside>
         </main>
