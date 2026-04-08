@@ -108,6 +108,7 @@ export default function Home() {
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [activeFilter, setActiveFilter] = useState("Yeni");
   const [openPostId, setOpenPostId] = useState<string | null>(null);
   const [communities, setCommunities] = useState<string[]>([]);
@@ -119,8 +120,12 @@ export default function Home() {
   const [inviteCode, setInviteCode] = useState("");
   const [checkingInvite, setCheckingInvite] = useState(false);
 
+  // --- MODALLAR ÜÇÜN STATE-LƏR ---
   const [showWelcome, setShowWelcome] = useState(true);
   const [countdown, setCountdown] = useState(10);
+  const [showUniModal, setShowUniModal] = useState(false);
+  const [selectedUni, setSelectedUni] = useState("");
+  const universityList = ["BDU", "ADNSU", "UNEC", "BMU", "ADA", "BANM", "AzUAC", "ATU", "ADPU", "AMU", "Digər"];
 
   useEffect(() => {
     if (showWelcome && countdown > 0) {
@@ -149,28 +154,46 @@ export default function Home() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser && !currentUser.isAnonymous) {
         setUser(currentUser);
-        // Bazadan hasAccess yoxla
         const userDoc = await getDoc(doc(db, "users", currentUser.uid));
         if (userDoc.exists()) {
-          setHasAccess(userDoc.data().hasAccess);
+          const data = userDoc.data();
+          setUserProfile(data);
+          setHasAccess(data.hasAccess);
+          // Universitet seçilməyibsə modalı aç
+          if (!data.university || data.university === "Seçilməyib") {
+            setShowUniModal(true);
+          }
         } else {
           setHasAccess(false);
         }
       } else {
         setUser(null);
-        setHasAccess(true); // Qonaqlar üçün ana səhifə görünür qalsın
+        setHasAccess(true);
         await signInAnonymously(auth);
       }
     });
     return () => unsubscribe();
   }, []);
 
+  const handleSaveUniversity = async () => {
+    if (!selectedUni || !user) return;
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        university: selectedUni
+      });
+      setUserProfile((prev: any) => ({ ...prev, university: selectedUni }));
+      setShowUniModal(false);
+      toast.success(`Universitet: ${selectedUni}`);
+    } catch (err) {
+      toast.error("Xəta baş verdi!");
+    }
+  };
+
   const handleLogin = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
-      // Bazada yoxla və hasAccess: false ilə yarat
       const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
 
@@ -181,6 +204,7 @@ export default function Home() {
           displayName: user.displayName,
           photoURL: user.photoURL,
           hasAccess: false,
+          university: "Seçilməyib",
           createdAt: serverTimestamp(),
         });
         toast.success("Xoş gəldiniz! İndi dəvət kodunuzu daxil edin.");
@@ -196,7 +220,6 @@ export default function Home() {
       const inviteDoc = await getDoc(inviteRef);
 
       if (inviteDoc.exists() && !inviteDoc.data().isUsed) {
-        // Kodu istifadə et və istifadəçiyə icazə ver
         await updateDoc(inviteRef, {
           isUsed: true,
           usedBy: user.uid,
@@ -216,10 +239,10 @@ export default function Home() {
   const handleLogout = async () => {
     await signOut(auth);
     setHasAccess(true);
+    setUserProfile(null);
     toast.success("Çıxış edildi");
   };
 
-  // Postları çəkmə useEffect eyni qalır
   useEffect(() => {
     setLoading(true);
     const postsRef = collection(db, "posts");
@@ -277,6 +300,7 @@ export default function Home() {
         author: user?.displayName || "İstifadəçi",
         authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
         authorId: user?.uid,
+        authorUniversity: userProfile?.university || "Seçilməyib",
         votes: 1,
         upvotedBy: [user?.uid],
         downvotedBy: [],
@@ -337,6 +361,7 @@ export default function Home() {
         author: user?.displayName || "İstifadəçi",
         authorImg: user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png",
         authorId: user?.uid,
+        authorUniversity: userProfile?.university || "Seçilməyib",
         votes: 1,
         upvotedBy: [user?.uid],
         downvotedBy: [],
@@ -355,7 +380,6 @@ export default function Home() {
     post.community?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // --- KİLİDLİ EKRAN (INVITE GUARD) ---
   if (user && !user.isAnonymous && hasAccess === false) {
     return (
       <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#DAE0E6] dark:bg-[#030303] p-4">
@@ -388,10 +412,52 @@ export default function Home() {
     );
   }
 
-  // --- ANA RENDER ---
   return (
     <div className={`${isDarkMode ? "dark" : ""} min-h-screen transition-colors duration-300`}>
       <Toaster position="bottom-right" />
+
+      {/* UNİVERSİTET SEÇİM MODALI */}
+      {showUniModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <div className="w-full max-w-sm bg-white dark:bg-[#1A1A1B] p-6 rounded-2xl shadow-2xl border border-blue-500/30 text-center animate-in zoom-in duration-300">
+            <div className="bg-blue-100 dark:bg-blue-900/20 p-3 rounded-full w-fit mx-auto mb-4">
+              <User className="text-blue-600" size={28} />
+            </div>
+            <h2 className="text-xl font-bold mb-2 text-zinc-900 dark:text-white">Profilini Tamamla 🎓</h2>
+            <p className="text-xs text-gray-500 mb-6">Digər tələbələrin səni tanıması üçün universitetini seç.</p>
+            <div className="grid grid-cols-2 gap-2 mb-6 text-left">
+              {universityList.map((uni) => (
+                <button
+                  key={uni}
+                  onClick={() => setSelectedUni(uni)}
+                  className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all border ${
+                    selectedUni === uni 
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600" 
+                      : "border-gray-100 dark:border-zinc-800 hover:border-blue-300"
+                  }`}
+                >
+                  {uni}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={handleSaveUniversity}
+                disabled={!selectedUni}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition shadow-md active:scale-95"
+              >
+                Yadda Saxla
+              </button>
+              <button 
+                onClick={() => setShowUniModal(false)}
+                className="text-xs text-gray-400 hover:text-gray-600 transition underline"
+              >
+                İndi yox, sonra
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* XOŞ GƏLDİN MODALI */}
       {showWelcome && (
@@ -419,7 +485,6 @@ export default function Home() {
       )}
 
       <div className="bg-[#DAE0E6] dark:bg-[#030303] min-h-screen text-zinc-900 dark:text-zinc-100 font-sans">
-        {/* NAV BAR */}
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveCommunity(null); setSearchQuery("");}}>
             <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">R</div>
@@ -465,7 +530,6 @@ export default function Home() {
           </div>
         </nav>
 
-        {/* MAIN CONTENT */}
         <main className="mx-auto flex max-w-6xl gap-6 p-4 md:p-6">
           <div className="flex w-full flex-col gap-4 md:w-2/3">
             {activeCommunity && (
@@ -477,7 +541,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* PAYLAŞIM INPUTU */}
             <div className="flex flex-col gap-3 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" alt="user" />
@@ -518,7 +581,6 @@ export default function Home() {
               )}
             </div>
 
-            {/* FİLTERLƏR */}
             {!activeCommunity && !searchQuery && (
               <div className="flex gap-2 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-2 overflow-x-auto">
                 {["Trend", "Yeni", "Top"].map((f) => (
@@ -533,7 +595,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* POSTLARIN SİYAHISI */}
             {loading ? (
               <div className="space-y-4 animate-pulse">
                 {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-200 dark:bg-zinc-800 rounded"></div>)}
@@ -547,7 +608,6 @@ export default function Home() {
               filteredPosts.map((post) => (
                 <div key={post.id} className="flex flex-col rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] shadow-sm hover:border-gray-400 dark:hover:border-zinc-600 transition-colors overflow-hidden">
                   <div className="flex">
-                    {/* VOTE HİSSƏSİ */}
                     <div className="flex w-10 flex-col items-center bg-gray-50 dark:bg-[#151516] p-2 border-r dark:border-zinc-800">
                       <button onClick={() => handleVote(post.id, 'up')} className={`${post.upvotedBy?.includes(user?.uid) ? "text-orange-600" : "text-gray-400"} hover:bg-gray-200 dark:hover:bg-zinc-800 rounded p-1 transition`}>
                         <ArrowBigUp size={28} fill={post.upvotedBy?.includes(user?.uid) ? "currentColor" : "none"} />
@@ -559,11 +619,16 @@ export default function Home() {
                         <ArrowBigDown size={28} fill={post.downvotedBy?.includes(user?.uid) ? "currentColor" : "none"} />
                       </button>
                     </div>
-                    {/* POST MƏZMUNU */}
                     <div className="flex flex-col p-3 w-full">
                       <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-2">
                         <span onClick={() => setActiveCommunity(post.community)} className="font-bold text-zinc-900 dark:text-zinc-100 uppercase hover:underline cursor-pointer">{post.community}</span>
-                        <span>• u/{post.author} • {formatTime(post.createdAt)}</span>
+                        <span>• u/{post.author}</span>
+                        {post.authorUniversity && (
+                          <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-md font-bold text-[9px]">
+                            {post.authorUniversity}
+                          </span>
+                        )}
+                        <span>• {formatTime(post.createdAt)}</span>
                       </div>
                       <h2 className="text-lg font-semibold mb-2 leading-tight">{post.title}</h2>
                       {post.imageUrl && (
@@ -587,7 +652,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* ASIDE SİDEBAR */}
           <aside className="hidden w-1/3 flex-col gap-4 md:flex">
             {user?.isAnonymous && (
               <div className="p-4 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded shadow-lg animate-in fade-in zoom-in duration-300">
