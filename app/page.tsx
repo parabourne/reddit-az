@@ -115,17 +115,15 @@ export default function Home() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // --- INVITE SİSTEMİ ÜÇÜN STATE-LƏR ---
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [inviteCode, setInviteCode] = useState("");
   const [checkingInvite, setCheckingInvite] = useState(false);
 
-  // --- MODALLAR ÜÇÜN STATE-LƏR ---
   const [showWelcome, setShowWelcome] = useState(true);
   const [countdown, setCountdown] = useState(10);
   const [showUniModal, setShowUniModal] = useState(false);
   const [selectedUni, setSelectedUni] = useState("");
-  const universityList = ["BDU", "ADNSU", "UNEC", "BMU", "ADA", "BANM", "AzUAC", "ATU", "ADPU", "AMU", "Digər"];
+  const universityList = ["BDU", "ADNSU", "UNEC", "BMU", "ADA", "BANM", "AzUAC", "ATU", "ADPU", "LDU", "Digər"];
 
   useEffect(() => {
     if (showWelcome && countdown > 0) {
@@ -149,7 +147,6 @@ export default function Home() {
     return () => unsubscribe();
   }, [selectedCommunity]);
 
-  // Auth və Access Yoxlaması
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser && !currentUser.isAnonymous) {
@@ -159,7 +156,6 @@ export default function Home() {
           const data = userDoc.data();
           setUserProfile(data);
           setHasAccess(data.hasAccess);
-          // Universitet seçilməyibsə modalı aç
           if (!data.university || data.university === "Seçilməyib") {
             setShowUniModal(true);
           }
@@ -193,7 +189,6 @@ export default function Home() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-
       const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
 
@@ -207,7 +202,7 @@ export default function Home() {
           university: "Seçilməyib",
           createdAt: serverTimestamp(),
         });
-        toast.success("Xoş gəldiniz! İndi dəvət kodunuzu daxil edin.");
+        toast.success("Xoş gəldiniz!");
       }
     } catch (err) { toast.error("Giriş xətası!"); }
   };
@@ -218,7 +213,6 @@ export default function Home() {
     try {
       const inviteRef = doc(db, "invites", inviteCode.trim());
       const inviteDoc = await getDoc(inviteRef);
-
       if (inviteDoc.exists() && !inviteDoc.data().isUsed) {
         await updateDoc(inviteRef, {
           isUsed: true,
@@ -226,11 +220,10 @@ export default function Home() {
           usedAt: serverTimestamp()
         });
         await updateDoc(doc(db, "users", user.uid), { hasAccess: true });
-        
         setHasAccess(true);
-        toast.success("Uğurlu giriş! Kluba xoş gəldiniz.");
+        toast.success("Uğurlu giriş!");
       } else {
-        toast.error("Kod yanlışdır və ya artıq istifadə olunub!");
+        toast.error("Kod yanlışdır!");
       }
     } catch (err) { toast.error("Xəta baş verdi!"); }
     finally { setCheckingInvite(false); }
@@ -277,7 +270,7 @@ export default function Home() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.size > 5 * 1024 * 1024) return toast.error("Maksimum 5MB yükləyə bilərsiniz!");
+      if (file.size > 5 * 1024 * 1024) return toast.error("Maksimum 5MB!");
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
     }
@@ -315,7 +308,7 @@ export default function Home() {
   };
 
   const handleVote = async (postId: string, direction: 'up' | 'down') => {
-    if (!user || user.isAnonymous) return toast.error("Səs vermək üçün giriş etməlisiniz!");
+    if (!user || user.isAnonymous) return toast.error("Səs vermək üçün giriş edin!");
     const postRef = doc(db, "posts", postId);
     const post = posts.find(p => p.id === postId);
     if (!post) return;
@@ -351,7 +344,7 @@ export default function Home() {
   };
 
   const handleCrosspost = async (originalPost: any) => {
-    if (!user || user.isAnonymous) return toast.error("Paylaşmaq üçün giriş etməlisiniz!");
+    if (!user || user.isAnonymous) return toast.error("Paylaşmaq üçün giriş edin!");
     const loadingToast = toast.loading("Yenidən paylaşılır...");
     try {
       await addDoc(collection(db, "posts"), {
@@ -387,22 +380,18 @@ export default function Home() {
           <div className="bg-orange-100 dark:bg-orange-900/20 p-4 rounded-full w-fit mx-auto mb-4">
             <LogIn className="text-orange-600" size={32} />
           </div>
-          <h2 className="text-2xl font-bold mb-4">Məxfi Giriş 🔒</h2>
-          <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-            Modlam.com-un bu bölməsi yalnız dəvətnaməsi olan tələbələr üçündür. 
-            Zəhmət olmasa dostunuzdan aldığınız kodu daxil edin.
-          </p>
+          <h2 className="text-2xl font-bold mb-4 font-sans">Dəvət kodu ilə Giriş 🔒</h2>
           <input 
             value={inviteCode}
             onChange={(e) => setInviteCode(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleVerifyInvite()}
-            placeholder="Dəvət kodunu yazın..."
-            className="w-full bg-gray-100 dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 rounded-xl px-4 py-3 mb-4 outline-none focus:ring-2 focus:ring-orange-500 transition-all text-center font-mono tracking-widest uppercase"
+            placeholder="Dəvət kodu..."
+            className="w-full bg-gray-100 dark:bg-[#272729] border dark:border-zinc-700 rounded-xl px-4 py-3 mb-4 outline-none text-center font-mono uppercase tracking-widest"
           />
           <button 
             onClick={handleVerifyInvite}
             disabled={checkingInvite}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg active:scale-95"
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
           >
             {checkingInvite ? <Loader2 className="animate-spin" /> : "Girişi Təsdiqlə"}
           </button>
@@ -424,7 +413,6 @@ export default function Home() {
               <User className="text-blue-600" size={28} />
             </div>
             <h2 className="text-xl font-bold mb-2 text-zinc-900 dark:text-white">Profilini Tamamla 🎓</h2>
-            <p className="text-xs text-gray-500 mb-6">Digər tələbələrin səni tanıması üçün universitetini seç.</p>
             <div className="grid grid-cols-2 gap-2 mb-6 text-left">
               {universityList.map((uni) => (
                 <button
@@ -441,19 +429,8 @@ export default function Home() {
               ))}
             </div>
             <div className="flex flex-col gap-2">
-              <button 
-                onClick={handleSaveUniversity}
-                disabled={!selectedUni}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition shadow-md active:scale-95"
-              >
-                Yadda Saxla
-              </button>
-              <button 
-                onClick={() => setShowUniModal(false)}
-                className="text-xs text-gray-400 hover:text-gray-600 transition underline"
-              >
-                İndi yox, sonra
-              </button>
+              <button onClick={handleSaveUniversity} disabled={!selectedUni} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition shadow-md active:scale-95">Yadda Saxla</button>
+              <button onClick={() => setShowUniModal(false)} className="text-xs text-gray-400 hover:text-gray-600 transition underline">İndi yox, sonra</button>
             </div>
           </div>
         </div>
@@ -461,25 +438,13 @@ export default function Home() {
 
       {/* XOŞ GƏLDİN MODALI */}
       {showWelcome && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-md transform rounded-2xl bg-white dark:bg-[#1A1A1B] p-8 shadow-2xl animate-in zoom-in duration-300 border border-orange-500/20 text-center">
-            <button onClick={() => setShowWelcome(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-white transition">
-              <X size={20} />
-            </button>
-            <div className="bg-orange-600 p-3 rounded-full text-white mx-auto w-fit mb-4 shadow-lg shadow-orange-500/20">
-              <Flame size={32} />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">Modlam.com-a Xoş Gəlmisiniz!</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
-              Bu platforma Azərbaycanın ən aktiv müzakirə mərkəzidir. Bura giriş hələlik yalnız dəvətnamə ilədir.
-            </p>
-            <button onClick={() => setShowWelcome(false)} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl transition shadow-md active:scale-95 mb-4">
-              Anladım, başlayaq!
-            </button>
-            <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-400 uppercase tracking-widest">
-              <div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />
-              Pəncərə {countdown} saniyəyə bağlanacaq
-            </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-center">
+          <div className="relative w-full max-w-md transform rounded-2xl bg-white dark:bg-[#1A1A1B] p-8 shadow-2xl animate-in zoom-in duration-300 border border-orange-500/20">
+            <button onClick={() => setShowWelcome(false)} className="absolute top-4 right-4 text-gray-400"><X size={20} /></button>
+            <div className="bg-orange-600 p-3 rounded-full text-white mx-auto w-fit mb-4 shadow-lg shadow-orange-500/20"><Flame size={32} /></div>
+            <h2 className="text-2xl font-bold mb-2">Modlam-a Xoş Gəlmisiniz!</h2>
+            <button onClick={() => setShowWelcome(false)} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl transition shadow-md active:scale-95 mb-4">Anladım, başlayaq!</button>
+            <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-400 uppercase tracking-widest"><div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />Pəncərə {countdown} saniyəyə bağlanacaq</div>
           </div>
         </div>
       )}
@@ -487,46 +452,13 @@ export default function Home() {
       <div className="bg-[#DAE0E6] dark:bg-[#030303] min-h-screen text-zinc-900 dark:text-zinc-100 font-sans">
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveCommunity(null); setSearchQuery("");}}>
-            <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">R</div>
+            <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">M</div>
             <h1 className="hidden md:block text-xl font-bold tracking-tight">modlam.com</h1>
           </div>
-
-          <div className="flex-1 max-w-xl mx-4">
-            <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors" size={18} />
-              <input 
-                type="text"
-                placeholder="Postlarda və ya icmalarda axtar..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-gray-100 dark:bg-[#272729] border border-transparent focus:border-orange-500 focus:bg-white dark:focus:bg-[#1A1A1B] rounded-full py-1.5 pl-10 pr-10 outline-none text-sm transition-all"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition">
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-          </div>
-
+          <div className="flex-1 max-w-xl mx-4"><div className="relative group"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors" size={18} /><input type="text" placeholder="Axtar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-gray-100 dark:bg-[#272729] rounded-full py-1.5 pl-10 pr-10 outline-none text-sm transition-all" /></div></div>
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition">
-                {isDarkMode ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} />}
-            </button>
-            {user && !user.isAnonymous ? (
-              <div className="flex items-center gap-2">
-                <Link href="/profile">
-                  <img src={user.photoURL} className="h-8 w-8 rounded-full border dark:border-zinc-700 cursor-pointer hover:ring-2 hover:ring-orange-500 transition" alt="profile" />
-                </Link>
-                <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-500 transition">
-                  <LogOut size={20} />
-                </button>
-              </div>
-            ) : (
-              <button onClick={handleLogin} className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-sm font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-md">
-                <LogIn size={18} /> <span className="hidden md:block">Giriş</span>
-              </button>
-            )}
+            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition">{isDarkMode ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} />}</button>
+            {user && !user.isAnonymous ? (<div className="flex items-center gap-2"><Link href="/profile"><img src={user.photoURL} className="h-8 w-8 rounded-full border dark:border-zinc-700" alt="profile" /></Link><button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-500 transition"><LogOut size={20} /></button></div>) : (<button onClick={handleLogin} className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-sm font-bold transition flex items-center gap-2 shadow-md"><LogIn size={18} /> Giriş</button>)}
           </div>
         </nav>
 
@@ -535,114 +467,57 @@ export default function Home() {
             {activeCommunity && (
               <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-md shadow-sm">
                 <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">Göstərilir: <span className="underline">{activeCommunity}</span></p>
-                <button onClick={() => setActiveCommunity(null)} className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-red-500 transition">
-                  <X size={14} /> Təmizlə
-                </button>
+                <button onClick={() => setActiveCommunity(null)} className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-red-500 transition"><X size={14} /> Təmizlə</button>
               </div>
             )}
 
             <div className="flex flex-col gap-3 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                <img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" alt="user" />
-                <input 
-                  value={postInput} 
-                  onChange={(e) => setPostInput(e.target.value)} 
-                  onKeyDown={(e) => e.key === "Enter" && handleAddPost()}
-                  placeholder={user?.isAnonymous ? "Paylaşmaq üçün giriş edin..." : "Nə düşünürsünüz?"}
-                  disabled={user?.isAnonymous}
-                  className="flex-1 rounded-md bg-gray-100 dark:bg-[#272729] border border-gray-200 dark:border-zinc-700 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all disabled:opacity-50" 
-                />
-                {!user?.isAnonymous && (
-                  <label className="cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 p-2 rounded-full transition-colors text-blue-500">
-                    <ImagePlus size={22} />
-                    <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                  </label>
-                )}
-              </div>
-
+              <div className="flex items-center gap-3"><img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" alt="user" /><input value={postInput} onChange={(e) => setPostInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAddPost()} placeholder="Nə düşünürsünüz?" disabled={user?.isAnonymous} className="flex-1 rounded-md bg-gray-100 dark:bg-[#272729] px-4 py-2 text-sm outline-none disabled:opacity-50" />{!user?.isAnonymous && <label className="cursor-pointer text-blue-500"><ImagePlus size={22} /><input type="file" accept="image/*" className="hidden" onChange={handleImageChange} /></label>}</div>
+              
+              {/* PAYLAŞIM ÖNİZLƏMƏSİ - DÜZƏLİŞ BURADADIR */}
               {imagePreview && (
-                <div className="relative mt-2 w-full flex justify-center overflow-hidden rounded-lg border dark:border-zinc-700 bg-gray-50 dark:bg-zinc-900 shadow-inner">
-                  <img src={imagePreview} className="max-h-48 w-auto object-contain p-1" alt="preview" />
-                  <button onClick={() => {setImageFile(null); setImagePreview(null);}} className="absolute top-1 right-1 bg-black/50 text-white p-1.5 rounded-full hover:bg-black transition"><X size={14} /></button>
+                <div className="relative mt-2 flex justify-start"> {/* Preview-nu sola çəkdik */}
+                  <div className="relative inline-block bg-black/5 dark:bg-white/5 rounded-lg border dark:border-zinc-800 shadow-inner overflow-hidden"> {/* inline-block ilə fonu daraltdıq */}
+                    <img src={imagePreview} className="max-h-40 w-auto object-contain p-2" alt="preview" />
+                    <button onClick={() => {setImageFile(null); setImagePreview(null);}} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full hover:bg-black transition"><X size={14} /></button>
+                  </div>
                 </div>
               )}
 
-              {!user?.isAnonymous && (
-                <div className="flex justify-between items-center border-t dark:border-zinc-800 pt-3">
-                  <select 
-                    value={selectedCommunity} 
-                    onChange={(e) => setSelectedCommunity(e.target.value)}
-                    className="bg-gray-100 dark:bg-[#272729] text-xs font-bold p-1.5 rounded border border-transparent outline-none cursor-pointer hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
-                  >
-                    {communities.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <button onClick={handleAddPost} className="bg-blue-600 text-white px-5 py-1.5 rounded-full text-sm font-bold hover:bg-blue-700 shadow-md transition transform active:scale-95">Paylaş</button>
-                </div>
-              )}
+              {!user?.isAnonymous && (<div className="flex justify-between items-center border-t dark:border-zinc-800 pt-3"><select value={selectedCommunity} onChange={(e) => setSelectedCommunity(e.target.value)} className="bg-gray-100 dark:bg-[#272729] text-xs font-bold p-1.5 rounded outline-none">{communities.map(c => <option key={c} value={c}>{c}</option>)}</select><button onClick={handleAddPost} className="bg-blue-600 text-white px-5 py-1.5 rounded-full text-sm font-bold shadow-md transform active:scale-95">Paylaş</button></div>)}
             </div>
 
-            {!activeCommunity && !searchQuery && (
-              <div className="flex gap-2 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-2 overflow-x-auto">
-                {["Trend", "Yeni", "Top"].map((f) => (
-                  <button 
-                    key={f}
-                    onClick={() => setActiveFilter(f)}
-                    className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold transition-all ${activeFilter === f ? "bg-gray-100 dark:bg-zinc-800 text-blue-500 shadow-inner" : "text-gray-500 hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}
-                  >
-                    {f === "Trend" && <Flame size={18} />} {f}
-                  </button>
-                ))}
-              </div>
-            )}
+            {!activeCommunity && !searchQuery && (<div className="flex gap-2 p-2 overflow-x-auto">{["Trend", "Yeni", "Top"].map((f) => (<button key={f} onClick={() => setActiveFilter(f)} className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${activeFilter === f ? "bg-white dark:bg-zinc-800 text-blue-500 shadow-inner" : "text-gray-500"}`}>{f}</button>))}</div>)}
 
-            {loading ? (
-              <div className="space-y-4 animate-pulse">
-                {[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-200 dark:bg-zinc-800 rounded"></div>)}
-              </div>
-            ) : filteredPosts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-[#1A1A1B] rounded border border-dashed border-gray-300 dark:border-zinc-800">
-                <Search size={48} className="text-gray-200 mb-4" />
-                <p className="text-gray-500 font-medium">Nəticə tapılmadı.</p>
-              </div>
-            ) : (
+            {loading ? (<div className="space-y-4 animate-pulse">{[1, 2, 3].map(i => <div key={i} className="h-32 bg-gray-200 dark:bg-zinc-800 rounded"></div>)}</div>) : filteredPosts.length === 0 ? (<div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-[#1A1A1B] rounded border border-dashed dark:border-zinc-800"><Search size={48} className="text-gray-200 mb-4" /><p className="text-gray-500 font-medium">Nəticə tapılmadı.</p></div>) : (
               filteredPosts.map((post) => (
-                <div key={post.id} className="flex flex-col rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] shadow-sm hover:border-gray-400 dark:hover:border-zinc-600 transition-colors overflow-hidden">
+                <div key={post.id} className="flex flex-col rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] shadow-sm overflow-hidden">
                   <div className="flex">
                     <div className="flex w-10 flex-col items-center bg-gray-50 dark:bg-[#151516] p-2 border-r dark:border-zinc-800">
-                      <button onClick={() => handleVote(post.id, 'up')} className={`${post.upvotedBy?.includes(user?.uid) ? "text-orange-600" : "text-gray-400"} hover:bg-gray-200 dark:hover:bg-zinc-800 rounded p-1 transition`}>
-                        <ArrowBigUp size={28} fill={post.upvotedBy?.includes(user?.uid) ? "currentColor" : "none"} />
-                      </button>
-                      <span className={`text-xs font-bold py-1 ${post.upvotedBy?.includes(user?.uid) ? "text-orange-600" : post.downvotedBy?.includes(user?.uid) ? "text-blue-600" : ""}`}>
-                        {post.votes}
-                      </span>
-                      <button onClick={() => handleVote(post.id, 'down')} className={`${post.downvotedBy?.includes(user?.uid) ? "text-blue-600" : "text-gray-400"} hover:bg-gray-200 dark:hover:bg-zinc-800 rounded p-1 transition`}>
-                        <ArrowBigDown size={28} fill={post.downvotedBy?.includes(user?.uid) ? "currentColor" : "none"} />
-                      </button>
+                      <button onClick={() => handleVote(post.id, 'up')} className={`${post.upvotedBy?.includes(user?.uid) ? "text-orange-600" : "text-gray-400"}`}><ArrowBigUp size={28} fill={post.upvotedBy?.includes(user?.uid) ? "currentColor" : "none"} /></button>
+                      <span className="text-xs font-bold py-1">{post.votes}</span>
+                      <button onClick={() => handleVote(post.id, 'down')} className={`${post.downvotedBy?.includes(user?.uid) ? "text-blue-600" : "text-gray-400"}`}><ArrowBigDown size={28} fill={post.downvotedBy?.includes(user?.uid) ? "currentColor" : "none"} /></button>
                     </div>
                     <div className="flex flex-col p-3 w-full">
-                      <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-2">
+                      <div className="flex items-center flex-wrap gap-2 text-[10px] text-gray-500 mb-1">
                         <span onClick={() => setActiveCommunity(post.community)} className="font-bold text-zinc-900 dark:text-zinc-100 uppercase hover:underline cursor-pointer">{post.community}</span>
                         <span>• u/{post.author}</span>
-                        {post.authorUniversity && (
-                          <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-md font-bold text-[9px]">
-                            {post.authorUniversity}
-                          </span>
-                        )}
+                        {post.authorUniversity && (<span className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold">{post.authorUniversity}</span>)}
                         <span>• {formatTime(post.createdAt)}</span>
                       </div>
                       <h2 className="text-lg font-semibold mb-2 leading-tight">{post.title}</h2>
+                      
                       {post.imageUrl && (
-                        <div className="my-3 rounded-lg overflow-hidden bg-gray-100 dark:bg-zinc-900 flex justify-center border dark:border-zinc-800 shadow-sm">
-                           <img src={post.imageUrl} className="max-h-80 w-auto object-contain" alt={post.title} />
+                        <div className="my-2 flex justify-start">
+                          <div className="rounded-lg overflow-hidden border dark:border-zinc-800 shadow-sm bg-black/5 dark:bg-white/5 inline-block">
+                             <img src={post.imageUrl} className="max-h-[320px] w-auto object-contain" alt={post.title} loading="lazy" />
+                          </div>
                         </div>
                       )}
-                      <div className="flex gap-4 text-xs font-bold text-gray-500 mt-auto pt-2">
-                        <button onClick={() => setOpenPostId(openPostId === post.id ? null : post.id)} className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition">
-                          <MessageSquare size={18} /> {post.comments || 0} Şərh
-                        </button>
-                        <button onClick={() => handleCrosspost(post)} className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition">
-                          <Share2 size={18} /> Paylaş
-                        </button>
+
+                      <div className="flex gap-4 text-xs font-bold text-gray-500 pt-2">
+                        <button onClick={() => setOpenPostId(openPostId === post.id ? null : post.id)} className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition"><MessageSquare size={18} /> {post.comments || 0} Şərh</button>
+                        <button onClick={() => handleCrosspost(post)} className="flex items-center gap-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 px-3 py-1.5 rounded transition"><Share2 size={18} /> Paylaş</button>
                       </div>
                     </div>
                   </div>
@@ -653,32 +528,13 @@ export default function Home() {
           </div>
 
           <aside className="hidden w-1/3 flex-col gap-4 md:flex">
-            {user?.isAnonymous && (
-              <div className="p-4 bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded shadow-lg animate-in fade-in zoom-in duration-300">
-                <h3 className="font-bold mb-1 flex items-center gap-2 text-sm"><Flame size={18} /> Müzakirələrə qoşulun!</h3>
-                <p className="text-[11px] mb-3 opacity-90 leading-relaxed">Giriş hələlik yalnız dəvətnamə ilədir.</p>
-                <button onClick={handleLogin} className="w-full bg-white text-orange-600 py-1.5 rounded-md font-bold text-xs shadow-md hover:bg-gray-100 transition flex items-center justify-center gap-2">
-                  <LogIn size={14} /> Google ilə daxil ol
-                </button>
-              </div>
-            )}
-
+            {user?.isAnonymous && (<div className="p-4 bg-orange-600 text-white rounded shadow-lg animate-in fade-in zoom-in duration-300"><h3 className="font-bold mb-1 flex items-center gap-2 text-sm"><Flame size={18} /> Müzakirələrə qoşulun!</h3><button onClick={handleLogin} className="w-full bg-white text-orange-600 py-1.5 rounded-md font-bold text-xs shadow-md hover:bg-gray-100 transition flex items-center justify-center gap-2 mt-2"><LogIn size={14} /> Giriş et</button></div>)}
             <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden shadow-sm">
-                <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
+                <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4"> Populyar İcmalar</div>
                 <div className="p-2 flex flex-col gap-1">
                    <div onClick={() => setActiveCommunity(null)} className={`flex items-center gap-3 p-2 rounded cursor-pointer transition text-sm font-semibold ${!activeCommunity ? "bg-gray-100 dark:bg-zinc-800" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}>🏠 Hamısı</div>
-                   {communities.map(c => (
-                    <div key={c} onClick={() => setActiveCommunity(c)} className={`flex items-center justify-between p-2 rounded cursor-pointer transition ${activeCommunity === c ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}>
-                      <span className="text-sm font-semibold">{c}</span>
-                      <ChevronDown size={14} className="-rotate-90 opacity-40" />
-                    </div>
-                  ))}
+                   {communities.map(c => (<div key={c} onClick={() => setActiveCommunity(c)} className={`flex items-center justify-between p-2 rounded cursor-pointer transition ${activeCommunity === c ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}><span className="text-sm font-semibold">{c}</span></div>))}
                 </div>
-            </div>
-            
-            <div className="p-4 bg-white dark:bg-[#1A1A1B] rounded border border-gray-300 dark:border-zinc-800 shadow-sm text-xs opacity-70">
-              <h3 className="font-bold uppercase mb-2">Haqqımızda</h3>
-              <p>Modlam.com - Azərbaycanın müzakirə platforması.</p>
             </div>
           </aside>
         </main>
