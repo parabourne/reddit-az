@@ -442,7 +442,7 @@ export default function Home() {
           <div className="relative w-full max-w-md transform rounded-2xl bg-white dark:bg-[#1A1A1B] p-8 shadow-2xl animate-in zoom-in duration-300 border border-orange-500/20">
             <button onClick={() => setShowWelcome(false)} className="absolute top-4 right-4 text-gray-400"><X size={20} /></button>
             <div className="bg-orange-600 p-3 rounded-full text-white mx-auto w-fit mb-4 shadow-lg shadow-orange-500/20"><Flame size={32} /></div>
-            <h2 className="text-2xl font-bold mb-2">Modlam-a Xoş Gəlmisiniz!</h2>
+            <h2 className="text-2xl font-bold mb-2">Reddaz-a Xoş Gəlmisiniz!</h2>
             <button onClick={() => setShowWelcome(false)} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl transition shadow-md active:scale-95 mb-4">Anladım, başlayaq!</button>
             <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-400 uppercase tracking-widest"><div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />Pəncərə {countdown} saniyəyə bağlanacaq</div>
           </div>
@@ -453,7 +453,7 @@ export default function Home() {
         <nav className="sticky top-0 z-50 flex h-14 items-center justify-between bg-white dark:bg-[#1A1A1B] px-4 md:px-20 border-b dark:border-zinc-800 shadow-sm">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setActiveCommunity(null); setSearchQuery("");}}>
             <div className="bg-orange-600 p-1.5 rounded-full text-white font-bold h-9 w-9 flex items-center justify-center shadow-lg">M</div>
-            <h1 className="hidden md:block text-xl font-bold tracking-tight">modlam.com</h1>
+            <h1 className="hidden md:block text-xl font-bold tracking-tight">reddaz.com</h1>
           </div>
           <div className="flex-1 max-w-xl mx-4"><div className="relative group"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors" size={18} /><input type="text" placeholder="Axtar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-gray-100 dark:bg-[#272729] rounded-full py-1.5 pl-10 pr-10 outline-none text-sm transition-all" /></div></div>
           <div className="flex items-center gap-4">
