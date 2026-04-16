@@ -34,7 +34,6 @@ const formatTime = (timestamp: any) => {
   } catch (err) { return "indi"; }
 };
 
-// --- KOMMENT KOMPONENTİ ---
 function InlineComments({ postId, user }: { postId: string, user: any }) {
   const [comments, setComments] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -98,7 +97,6 @@ function InlineComments({ postId, user }: { postId: string, user: any }) {
   );
 }
 
-// --- ANA SƏHİFƏ KOMPONENTİ ---
 export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [postInput, setPostInput] = useState("");
@@ -114,10 +112,6 @@ export default function Home() {
   const [communities, setCommunities] = useState<string[]>([]);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-
-  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
-  const [inviteCode, setInviteCode] = useState("");
-  const [checkingInvite, setCheckingInvite] = useState(false);
 
   const [showWelcome, setShowWelcome] = useState(true);
   const [countdown, setCountdown] = useState(10);
@@ -151,20 +145,36 @@ export default function Home() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser && !currentUser.isAnonymous) {
         setUser(currentUser);
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+
         if (userDoc.exists()) {
           const data = userDoc.data();
-          setUserProfile(data);
-          setHasAccess(data.hasAccess);
+          // hasAccess-i həmişə true et, köhnə false dəyərini yenilə
+          if (!data.hasAccess) {
+            await updateDoc(userDocRef, { hasAccess: true });
+          }
+          setUserProfile({ ...data, hasAccess: true });
           if (!data.university || data.university === "Seçilməyib") {
             setShowUniModal(true);
           }
         } else {
-          setHasAccess(false);
+          // Doc yoxdursa yarat - hasAccess: true ilə
+          await setDoc(userDocRef, {
+            uid: currentUser.uid,
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            photoURL: currentUser.photoURL,
+            hasAccess: true,
+            university: "Seçilməyib",
+            createdAt: serverTimestamp(),
+          });
+          setUserProfile({ hasAccess: true, university: "Seçilməyib" });
+          setShowUniModal(true);
+          toast.success("Xoş gəldiniz!");
         }
       } else {
         setUser(null);
-        setHasAccess(true);
         await signInAnonymously(auth);
       }
     });
@@ -174,9 +184,7 @@ export default function Home() {
   const handleSaveUniversity = async () => {
     if (!selectedUni || !user) return;
     try {
-      await updateDoc(doc(db, "users", user.uid), {
-        university: selectedUni
-      });
+      await updateDoc(doc(db, "users", user.uid), { university: selectedUni });
       setUserProfile((prev: any) => ({ ...prev, university: selectedUni }));
       setShowUniModal(false);
       toast.success(`Universitet: ${selectedUni}`);
@@ -187,51 +195,12 @@ export default function Home() {
 
   const handleLogin = async () => {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      const userDocRef = doc(db, "users", user.uid);
-      const userDoc = await getDoc(userDocRef);
-
-      if (!userDoc.exists()) {
-        await setDoc(userDocRef, {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          hasAccess: false,
-          university: "Seçilməyib",
-          createdAt: serverTimestamp(),
-        });
-        toast.success("Xoş gəldiniz!");
-      }
+      await signInWithPopup(auth, googleProvider);
     } catch (err) { toast.error("Giriş xətası!"); }
-  };
-
-  const handleVerifyInvite = async () => {
-    if (!inviteCode.trim() || !user) return;
-    setCheckingInvite(true);
-    try {
-      const inviteRef = doc(db, "invites", inviteCode.trim());
-      const inviteDoc = await getDoc(inviteRef);
-      if (inviteDoc.exists() && !inviteDoc.data().isUsed) {
-        await updateDoc(inviteRef, {
-          isUsed: true,
-          usedBy: user.uid,
-          usedAt: serverTimestamp()
-        });
-        await updateDoc(doc(db, "users", user.uid), { hasAccess: true });
-        setHasAccess(true);
-        toast.success("Uğurlu giriş!");
-      } else {
-        toast.error("Kod yanlışdır!");
-      }
-    } catch (err) { toast.error("Xəta baş verdi!"); }
-    finally { setCheckingInvite(false); }
   };
 
   const handleLogout = async () => {
     await signOut(auth);
-    setHasAccess(true);
     setUserProfile(null);
     toast.success("Çıxış edildi");
   };
@@ -373,39 +342,10 @@ export default function Home() {
     post.community?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (user && !user.isAnonymous && hasAccess === false) {
-    return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#DAE0E6] dark:bg-[#030303] p-4">
-        <div className="w-full max-w-md bg-white dark:bg-[#1A1A1B] p-8 rounded-2xl shadow-2xl border border-orange-500/30 text-center animate-in zoom-in duration-300">
-          <div className="bg-orange-100 dark:bg-orange-900/20 p-4 rounded-full w-fit mx-auto mb-4">
-            <LogIn className="text-orange-600" size={32} />
-          </div>
-          <h2 className="text-2xl font-bold mb-4 font-sans">Dəvət kodu ilə Giriş 🔒</h2>
-          <input 
-            value={inviteCode}
-            onChange={(e) => setInviteCode(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleVerifyInvite()}
-            placeholder="Dəvət kodu..."
-            className="w-full bg-gray-100 dark:bg-[#272729] border dark:border-zinc-700 rounded-xl px-4 py-3 mb-4 outline-none text-center font-mono uppercase tracking-widest"
-          />
-          <button 
-            onClick={handleVerifyInvite}
-            disabled={checkingInvite}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
-          >
-            {checkingInvite ? <Loader2 className="animate-spin" /> : "Girişi Təsdiqlə"}
-          </button>
-          <button onClick={handleLogout} className="mt-6 text-xs text-gray-400 hover:text-red-500 underline transition">Başqa hesabla daxil ol</button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={`${isDarkMode ? "dark" : ""} min-h-screen transition-colors duration-300`}>
       <Toaster position="bottom-right" />
 
-      {/* UNİVERSİTET SEÇİM MODALI */}
       {showUniModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
           <div className="w-full max-w-sm bg-white dark:bg-[#1A1A1B] p-6 rounded-2xl shadow-2xl border border-blue-500/30 text-center animate-in zoom-in duration-300">
@@ -436,7 +376,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* XOŞ GƏLDİN MODALI */}
       {showWelcome && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-center">
           <div className="relative w-full max-w-md transform rounded-2xl bg-white dark:bg-[#1A1A1B] p-8 shadow-2xl animate-in zoom-in duration-300 border border-orange-500/20">
@@ -474,10 +413,9 @@ export default function Home() {
             <div className="flex flex-col gap-3 rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] p-4 shadow-sm">
               <div className="flex items-center gap-3"><img src={user?.photoURL || "https://www.redditstatic.com/avatars/defaults/v2/avatar_default_1.png"} className="h-9 w-9 rounded-full" alt="user" /><input value={postInput} onChange={(e) => setPostInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAddPost()} placeholder="Nə düşünürsünüz?" disabled={user?.isAnonymous} className="flex-1 rounded-md bg-gray-100 dark:bg-[#272729] px-4 py-2 text-sm outline-none disabled:opacity-50" />{!user?.isAnonymous && <label className="cursor-pointer text-blue-500"><ImagePlus size={22} /><input type="file" accept="image/*" className="hidden" onChange={handleImageChange} /></label>}</div>
               
-              {/* PAYLAŞIM ÖNİZLƏMƏSİ - DÜZƏLİŞ BURADADIR */}
               {imagePreview && (
-                <div className="relative mt-2 flex justify-start"> {/* Preview-nu sola çəkdik */}
-                  <div className="relative inline-block bg-black/5 dark:bg-white/5 rounded-lg border dark:border-zinc-800 shadow-inner overflow-hidden"> {/* inline-block ilə fonu daraltdıq */}
+                <div className="relative mt-2 flex justify-start">
+                  <div className="relative inline-block bg-black/5 dark:bg-white/5 rounded-lg border dark:border-zinc-800 shadow-inner overflow-hidden">
                     <img src={imagePreview} className="max-h-40 w-auto object-contain p-2" alt="preview" />
                     <button onClick={() => {setImageFile(null); setImagePreview(null);}} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full hover:bg-black transition"><X size={14} /></button>
                   </div>
@@ -530,7 +468,7 @@ export default function Home() {
           <aside className="hidden w-1/3 flex-col gap-4 md:flex">
             {user?.isAnonymous && (<div className="p-4 bg-orange-600 text-white rounded shadow-lg animate-in fade-in zoom-in duration-300"><h3 className="font-bold mb-1 flex items-center gap-2 text-sm"><Flame size={18} /> Müzakirələrə qoşulun!</h3><button onClick={handleLogin} className="w-full bg-white text-orange-600 py-1.5 rounded-md font-bold text-xs shadow-md hover:bg-gray-100 transition flex items-center justify-center gap-2 mt-2"><LogIn size={14} /> Giriş et</button></div>)}
             <div className="rounded border border-gray-300 dark:border-zinc-800 bg-white dark:bg-[#1A1A1B] overflow-hidden shadow-sm">
-                <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4"> Populyar İcmalar</div>
+                <div className="h-10 bg-blue-600 p-2 flex items-center uppercase text-white font-bold text-[10px] px-4">Populyar İcmalar</div>
                 <div className="p-2 flex flex-col gap-1">
                    <div onClick={() => setActiveCommunity(null)} className={`flex items-center gap-3 p-2 rounded cursor-pointer transition text-sm font-semibold ${!activeCommunity ? "bg-gray-100 dark:bg-zinc-800" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}>🏠 Hamısı</div>
                    {communities.map(c => (<div key={c} onClick={() => setActiveCommunity(c)} className={`flex items-center justify-between p-2 rounded cursor-pointer transition ${activeCommunity === c ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"}`}><span className="text-sm font-semibold">{c}</span></div>))}
